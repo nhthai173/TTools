@@ -46,7 +46,7 @@ function toRawText(str = ''){
 /**
  *
  * @param {(string|Bytes[])} input The value to hash.
- * @param {boolean} isShortMode Set true for 4 digit shortend hash, else returns usual MD5 hash.
+ * @param {boolean} isShortMode Set true for 4 digit shortened hash, else returns usual MD5 hash.
  * @return {string} The hashed input
  * @customfunction
  *
@@ -106,7 +106,7 @@ function getRanNum(len = 6){
 
 
 /**
- * Compare 2 value
+ * Smart compare two values, support string, number, date. Return `true` if equal.
  * @param{any} a
  * @param{any} b
  * @param{string} type optional 'number' | 'date'
@@ -135,9 +135,24 @@ function smartCompare(a, b, type = ''){
 }
 
 
-
-function isEmptyVariable(a){
-  if(a === undefined || a === null || a === '' || a === NaN){
+/**
+ * 
+ * @param {*} a 
+ * @param {Object} options 
+ * @returns 
+ */
+function isEmptyVariable(a, {allowZero = true, allowEmtyString = false, evenString = false} = {}){
+  if(a === undefined || a === null || isNaN(a)){
+    return true
+  }
+  if(evenString){
+    if(a === 'undefined' || a === 'null' || a === 'NaN')
+      return true
+  }
+  if(!allowZero && a === 0){
+    return true
+  }
+  if(!allowEmtyString && a === ''){
     return true
   }
   return false
