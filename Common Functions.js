@@ -142,7 +142,7 @@ function smartCompare(a, b, type = ''){
  * @returns 
  */
 function isEmptyVariable(a, {allowZero = true, allowEmtyString = false, evenString = false} = {}){
-  if(a === undefined || a === null || isNaN(a)){
+  if(a === undefined || a === null || (typeof a === 'number' && isNaN(a))){
     return true
   }
   if(evenString){
