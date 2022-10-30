@@ -32,7 +32,7 @@ function BillSheet({
       }
     }
   } else {
-    transform = null
+    transform = {}
   }
 
   if (typeof fCustom !== 'function') {
@@ -51,6 +51,51 @@ function BillSheet({
   }
 
   /**
+   * Get a row data as an object
+   * @param {[]} rowData 
+   * @returns {{}|null}
+   */
+  function _toJSON(rowData = [], ignoreEmpty = true) {
+    let output = {}
+    if (!Array.isArray(rowData)) return null
+    if (!ignoreEmpty && rowData.length === 0) return null
+    if (!isValidObject(path)) return null
+    for (const prop in path) {
+      output[ prop ] = rowData[ path[ prop ] ] || ''
+    }
+    return output
+  }
+
+  /**
+   * Custom transform function
+   * @param {{}} data row data
+   * @returns {{}} transformed data
+   */
+  function _transformData(data = {}, ignoreEmpty = false) {
+    if (!ignoreEmpty && !isValidObject(data)) return {}
+    if (fCustom) {
+      let fData = fCustom(data)
+      if (isValidObject(fData)) data = fData
+    }
+
+    function __transform(prop = '') {
+      if (transform[ prop ]) {
+        try {
+          let tData = transform[ prop ](data[ prop ])
+          if (tData !== undefined) data[ prop ] = tData
+        } catch (e) { console.error(`Error at transfrom "${prop}"`, e) }
+      }
+    }
+    if (!ignoreEmpty) {
+      for (const i in data) __transform(i)
+    } else {
+      for (const i in transform) __transform(i)
+    }
+    return data
+  }
+
+  /**
+   * Deprecated
    * @param {String} prop property name or "AND","OR"
    * @param {*} value property value or table of prop-value pairs
    * @param {Array} row row data
@@ -133,7 +178,7 @@ function BillSheet({
    * @param {{}|{}[]} data 
    * @param {String[]} idProps List of properties to update existing row
    */
-  function update(data, idProps = []) {
+  function update(data, idProps = [], { onlyUpdateOnChange = false, map = {}, callback } = {}) {
     const isIdPropsValid = isValidArray(idProps)
     let newData = []
     let sheetRange = null
@@ -177,14 +222,24 @@ function BillSheet({
             }
             if (matchCnt == idProps.length) {
               found = true
-              for (const j in sData) {
-                const id = path[ j ]
-                if (id >= 0) {
-                  anyRowToUpdate = true
-                  if (isEmptyVariable(sData[ j ])) {
-                    sData[ j ] = ''
+              sData = _transformData(sData)
+              const rData = _toJSON(sheetData[ i ])
+              if (!onlyUpdateOnChange || !compareObject(sData, rData, map)) {
+                if (callback && typeof callback === 'function') {
+                  let cbData = callback(rData, sData)
+                  if(isValidObject(cbData)) sData = cbData
+                }
+                function __updateRow(id) {
+                  if (id >= 0) {
+                    anyRowToUpdate = true
+                    if (isEmptyVariable(sData[ j ])) sData[ j ] = ''
+                    sheetData[ i ][ id ] = sData[ j ]
                   }
-                  sheetData[ i ][ id ] = sData[ j ]
+                }
+                if (isValidObject(map)) {
+                  for (const j in map) __updateRow(path[ map[ j ] ])
+                } else {
+                  for (const j in sData) __updateRow(path[ j ])
                 }
               }
             }
@@ -265,25 +320,16 @@ function BillSheet({
 
     // check if a empty new row
     let isNewRowEmpty = true
-    if (fCustom) {
-      let fData = fCustom(data)
-      if (isValidObject(fData)) {
-        data = fData
-      }
-    }
+    data = _transformData(data)
     for (const i in path) {
-      if (!isEmptyVariable(data[ i ])) {
-        if (transform && transform[ i ])
-          newRow[ path[ i ] ] = transform[ i ](data[ i ])
-        else
-          newRow[ path[ i ] ] = data[ i ]
-      }
+      if (data[ i ] !== undefined)
+        newRow[ path[ i ] ] = data[ i ]
     }
     for (const i in newRow) {
       if (!isEmptyVariable(newRow[ i ])) {
         isNewRowEmpty = false
         newRow[ i ] = String(newRow[ i ])
-      } else if (!isNewRowEmpty) {
+      } else {
         newRow[ i ] = ''
       }
     }
@@ -417,26 +463,15 @@ function BillSheet({
 
     let data = ss.getRange(2, 1, ss.getLastRow() - 1, ss.getLastColumn()).getValues()
     for (const i in data) {
-      let subOut = {}
-      for (const j in data[ i ]) {
-        for (const key in path) {
-          if (j == path[ key ]){
-            subOut[ key ] = data[ i ][ j ]
-            break
-          }
-        } 
-      }
-      if (isValidObject(subOut)) {
-        for (const j in subOut) {
-          if (!isEmptyVariable(subOut[ j ])) {
-            out.push(subOut)
-            break
-          }
-        }
-      }
+      const sData = _toJSON(data[ i ], false)
+      if (sData) out.push(sData)
     }
-    
+
     return out
+  }
+
+  function toJSON() {
+    return getAsJSON()
   }
 
   return {
@@ -445,7 +480,8 @@ function BillSheet({
     append,
     sort,
     prettify,
-    getAsJSON
+    getAsJSON,
+    toJSON
   }
 
 }
