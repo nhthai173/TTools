@@ -15,7 +15,11 @@ function getScriptProperty(name = '') {
  * @param str string
  * @return string
  */
-function toRawText(str = ''){
+function toRawText(str = '', {
+  removeSpecialChar = true,
+  removeSpace = true,
+  lowerCase = true
+} = {}){
   str = str.replace(/à|á|ạ|ả|ã|â|ầ|ấ|ậ|ẩ|ẫ|ă|ằ|ắ|ặ|ẳ|ẵ/g, "a");
   str = str.replace(/è|é|ẹ|ẻ|ẽ|ê|ề|ế|ệ|ể|ễ/g, "e");
   str = str.replace(/ì|í|ị|ỉ|ĩ/g, "i");
@@ -32,11 +36,13 @@ function toRawText(str = ''){
   str = str.replace(/Đ/g, "D");
   str = str.replace(/\u0300|\u0301|\u0303|\u0309|\u0323/g, ""); // ̀ ́ ̃ ̉ ̣  huyền, sắc, ngã, hỏi, nặng
   str = str.replace(/\u02C6|\u0306|\u031B/g, ""); // ˆ ̆ ̛  Â, Ê, Ă, Ơ, Ư
-  str = str.replace(/ + /g, "");
-  str = str.replace(/\s/g, "");
-  str = str.toLowerCase();
+  if(lowerCase)
+    str = str.toLowerCase();
+  if(removeSpace)
+    str = str.replace(/\s/g, "");
+  if(removeSpecialChar)
+    str = str.replace(/!|@|%|\^|\*|\(|\)|\+|\=|\<|\>|\?|\/|,|\.|\:|\;|\'|\"|\&|\#|\[|\]|~|\$|_|`|-|{|}|\||\\/g, "");
   str = str.trim();
-  str = str.replace(/!|@|%|\^|\*|\(|\)|\+|\=|\<|\>|\?|\/|,|\.|\:|\;|\'|\"|\&|\#|\[|\]|~|\$|_|`|-|{|}|\||\\/g, "");
   return str;
 }
 
@@ -115,24 +121,76 @@ function getRanNum(len = 6){
 function smartCompare(a, b, type = ''){
   let output = false
   try{
-    if(a && b){
-      if(type == 'number'){
-        a = parseFloat(a)
-        b = parseFloat(b)
-      }
-      if(type == 'date' || (a.getTime && b.getTime)){
-        a = a.getTime()
-        b = b.getTime()
-      }
+    // Date Object
+    if( a && b &&
+        a.getTime && b.getTime &&
+        typeof a.getTime === 'function' &&
+        typeof b.getTime === 'function'){
+          return a.getTime() === b.getTime()
     }
-    if(isEmptyVariable(a) && isEmptyVariable(b)){
+
+    // Special case
+    if(a === undefined && b === undefined) return true
+    if(a === null && b === null) return true
+    if(a === '' && b === '') return true
+    
+    // Number
+    if((typeof a === 'number' && typeof b === 'number') || type === 'number'){
+      a = parseFloat(a)
+      b = parseFloat(b)
+      if(isNaN(a) && isNaN(b)) return true
+    }
+
+    // Object
+    if(typeof a === 'object' && typeof b === 'object'){
+      const aIsArray = Array.isArray(a)
+      const bIsArray = Array.isArray(b)
+      const aLength = a.length || Object.keys(a).length
+      const bLength = b.length || Object.keys(b).length
+      if(aIsArray && !bIsArray) return false
+      if(!aIsArray && bIsArray) return false
+      if(!aLength && !bLength) return true
+      if(aLength !== bLength) return false
       output = true
-    }else{
-      output = a == b
+      for(const i in a){
+        if(b[i] === undefined) return false
+        output = output && smartCompare(a[i], b[i])
+        if(!output) return false
+      }
+      return true
     }
-  }catch(e){console.log(e)}
+
+    output = a == b
+
+  }catch(e){console.error('Error at [smartCompare]', e)}
   return output
 }
+
+
+/**
+ * Compare 2 objects with custom map
+ * @param{[]|{}} a
+ * @param{[]|{}} b
+ * @param{[]} map list of key to compare. If empty, it compares all
+ */
+function compareObject(a, b, map = [], {ignoreEmpty = false, ignoreType = false} = {}){
+  let output = true
+  if(!isValidArray(map)) return smartCompare(a, b)
+  if(!ignoreEmpty && isEmptyVariable(a)) return false
+  if(!ignoreEmpty && isEmptyVariable(b)) return false
+  if(!ignoreType && (Array.isArray(a) && !Array.isArray(b))) return false
+  if(!ignoreType && (!Array.isArray(a) && Array.isArray(b))) return false
+  for(const i in map){
+    const key = map[i]
+    if(a[key] !== undefined && b[key] !== undefined){
+      output = output && smartCompare(a[key], b[key])
+    }
+  }
+  return output
+}
+
+
+
 
 
 /**
@@ -145,6 +203,8 @@ function isEmptyVariable(a, {allowZero = true, allowEmtyString = false, evenStri
   if(a === undefined || a === null || (typeof a === 'number' && isNaN(a))){
     return true
   }
+  if(Array.isArray(a) && a.length === 0) return true
+  if(typeof a === 'object' && Object.keys(a).length === 0) return true
   if(evenString){
     if(a === 'undefined' || a === 'null' || a === 'NaN')
       return true
