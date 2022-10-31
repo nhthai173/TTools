@@ -149,7 +149,10 @@ function smartCompare(a, b, type = ''){
       const bLength = b.length || Object.keys(b).length
       if(aIsArray && !bIsArray) return false
       if(!aIsArray && bIsArray) return false
-      if(!aLength && !bLength) return true
+      if(!aLength && !bLength){
+        if(a.toString() !== b.toString()) return false
+        return true
+      }
       if(aLength !== bLength) return false
       output = true
       for(const i in a){
@@ -204,7 +207,11 @@ function isEmptyVariable(a, {allowZero = true, allowEmtyString = false, evenStri
     return true
   }
   if(Array.isArray(a) && a.length === 0) return true
-  if(typeof a === 'object' && Object.keys(a).length === 0) return true
+  if(typeof a === 'object' && Object.keys(a).length === 0){
+    let emptyObj = {}
+    emptyObj = emptyObj.toString()
+    if(a.toString() === emptyObj) return true
+  }
   if(evenString){
     if(a === 'undefined' || a === 'null' || a === 'NaN')
       return true
