@@ -18,7 +18,9 @@ function BillSheet({
   emptyPropList = [],
   uniquePropList = [],
   transform = {},
-  fCustom
+  fCustom, // deprecated
+  beforeAppend,
+  afterGet
 } = {}) {
 
   // Default variables (deprecated)
@@ -35,9 +37,8 @@ function BillSheet({
     transform = {}
   }
 
-  if (typeof fCustom !== 'function') {
-    fCustom = null
-  }
+  if (typeof beforeAppend !== 'function') beforeAppend = null
+  if (typeof afterGet !== 'function') afterGet = null
 
 
   // Get sheet as Sheet
@@ -55,7 +56,10 @@ function BillSheet({
    * @param {[]} rowData 
    * @returns {{}|null}
    */
-  function _toJSON(rowData = [], ignoreEmpty = true) {
+  function _toJSON(rowData = [], { 
+    ignoreEmpty = true,
+    ignoreGetTransform = false
+  }) {
     let output = {}
     if (!Array.isArray(rowData)) return null
     if (!ignoreEmpty && rowData.length === 0) return null
@@ -63,6 +67,7 @@ function BillSheet({
     for (const prop in path) {
       output[ prop ] = rowData[ path[ prop ] ] || ''
     }
+    if(!ignoreGetTransform) output = _transformGet(output)
     return output
   }
 
@@ -73,11 +78,6 @@ function BillSheet({
    */
   function _transformData(data = {}, ignoreEmpty = false) {
     if (!ignoreEmpty && !isValidObject(data)) return {}
-    if (fCustom) {
-      let fData = fCustom(data)
-      if (isValidObject(fData)) data = fData
-    }
-
     function __transform(prop = '') {
       if (transform[ prop ]) {
         try {
@@ -88,8 +88,39 @@ function BillSheet({
     }
     if (!ignoreEmpty) {
       for (const i in data) __transform(i)
-    } else {
+    } else if(transform) {
       for (const i in transform) __transform(i)
+    }
+  }
+  
+  /**
+   * Custom function before append to sheet
+   * @param {{}} data row data
+   * @returns {{}} transformed data
+   */
+  function _transformAppend(data = {}, ignoreEmpty = false){
+    if (!ignoreEmpty && !isValidObject(data)) return {}
+    if (beforeAppend) {
+      try {
+        let tData = beforeAppend(data)
+        if (isValidObject(tData)) data = tData
+      } catch (e) { console.error(`Error at beforeAppend`, e) }
+    }
+    return data
+  }
+
+  /**
+   * Custom function after get from sheet
+   * @param {{}} data row data
+   * @returns {{}} transformed data
+   */
+  function _transformGet(data = {}, ignoreEmpty = false) {
+    if (!ignoreEmpty && !isValidObject(data)) return {}
+    if (afterGet) {
+      try {
+        let tData = afterGet(data)
+        if (isValidObject(tData)) data = tData
+      } catch (e) { console.error(`Error at afterGet`, e) }
     }
     return data
   }
@@ -178,7 +209,7 @@ function BillSheet({
    * @param {{}|{}[]} data 
    * @param {String[]} idProps List of properties to update existing row
    */
-  function update(data, idProps = [], { onlyUpdateOnChange = false, map = {}, callback } = {}) {
+  function update(data, idProps = [], { appendIfNotFound = true, onlyUpdateOnChange = false, map = {}, beforeAppend, beforeChange } = {}) {
     const isIdPropsValid = isValidArray(idProps)
     let newData = []
     let sheetRange = null
@@ -206,6 +237,7 @@ function BillSheet({
 
     for (const sData of newData) {
       if (isValidObject(sData)) {
+        sData = _transformData(sData)
         let found = false
 
         // Find in sheetData
@@ -222,13 +254,14 @@ function BillSheet({
             }
             if (matchCnt == idProps.length) {
               found = true
-              sData = _transformData(sData)
               const rData = _toJSON(sheetData[ i ])
               if (!onlyUpdateOnChange || !compareObject(sData, rData, map)) {
-                if (callback && typeof callback === 'function') {
-                  let cbData = callback(rData, sData)
+                console.log('Detected data changes', sData)
+                if (beforeChange && typeof beforeChange === 'function') {
+                  let cbData = beforeChange(rData, sData)
                   if(isValidObject(cbData)) sData = cbData
                 }
+                sData = _transformAppend(sData)
                 function __updateRow(id) {
                   if (id >= 0) {
                     anyRowToUpdate = true
@@ -248,7 +281,11 @@ function BillSheet({
         }
 
         // If can not match or found row, append new row
-        if (!found) {
+        if (!found && appendIfNotFound) {
+          if(beforeAppend && typeof beforeAppend === 'function'){
+            let aData = beforeAppend(sData)
+            if(isValidObject(aData)) sData = aData
+          }
           appendList.push(sData)
         }
       }
@@ -260,7 +297,7 @@ function BillSheet({
       anyChange = true
     }
     if (isValidArray(appendList)) {
-      anyChange = append(appendList) || anyChange
+      anyChange = append(appendList, {ignoreDataTransform: true}) || anyChange
     }
 
     return anyChange
@@ -272,12 +309,18 @@ function BillSheet({
    * Append data to new row in sheet.
    * Return true if a new row added
    */
-  function append(data = {} || []) {
+  function append(data = {} || [], {
+    ignoreAppendTransform = false,
+    ignoreDataTransform = false
+  } = {}) {
     if (isValidArray(data)) {
       let anySuccess = false
       for (const i in data) {
         if (isValidObject(data[ i ])) {
-          const add = _append(data[ i ])
+          const add = _append(data[ i ], {
+            ignoreAppendTransform,
+            ignoreDataTransform
+          })
           if (add) anySuccess = true
         }
       }
@@ -286,7 +329,10 @@ function BillSheet({
         return true
       }
     } else if (isValidObject(data)) {
-      const add = _append(data)
+      const add = _append(data, {
+        ignoreAppendTransform,
+        ignoreDataTransform
+      })
       if (add) sort()
       return add
     }
@@ -298,7 +344,10 @@ function BillSheet({
    * Append data to new row in sheet.
    * return true if success added
    */
-  function _append(data = {}) {
+  function _append(data = {}, {
+    ignoreAppendTransform = false,
+    ignoreDataTransform = false
+  } = {}) {
     // Nothing to append
     if (!isValidObject(data)) return false
 
@@ -320,7 +369,8 @@ function BillSheet({
 
     // check if a empty new row
     let isNewRowEmpty = true
-    data = _transformData(data)
+    if (!ignoreDataTransform) data = _transformData(data)
+    if (!ignoreAppendTransform) data = _transformAppend(data)
     for (const i in path) {
       if (data[ i ] !== undefined)
         newRow[ path[ i ] ] = data[ i ]
@@ -328,7 +378,6 @@ function BillSheet({
     for (const i in newRow) {
       if (!isEmptyVariable(newRow[ i ])) {
         isNewRowEmpty = false
-        newRow[ i ] = String(newRow[ i ])
       } else {
         newRow[ i ] = ''
       }
@@ -452,9 +501,12 @@ function BillSheet({
   }
 
 
-
+  // Deprecated
   function getAsJSON() {
+    return toJSON()
+  }
 
+  function toJSON({ignoreGetTransform = false} = {}) {
     let out = []
     const ss = _sheet()
 
@@ -463,15 +515,14 @@ function BillSheet({
 
     let data = ss.getRange(2, 1, ss.getLastRow() - 1, ss.getLastColumn()).getValues()
     for (const i in data) {
-      const sData = _toJSON(data[ i ], false)
+      const sData = _toJSON(data[ i ], {
+        ignoreEmpty: false,
+        ignoreGetTransform
+      })
       if (sData) out.push(sData)
     }
 
     return out
-  }
-
-  function toJSON() {
-    return getAsJSON()
   }
 
   return {
