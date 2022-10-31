@@ -59,7 +59,7 @@ function BillSheet({
   function _toJSON(rowData = [], { 
     ignoreEmpty = true,
     ignoreGetTransform = false
-  }) {
+  } = {}) {
     let output = {}
     if (!Array.isArray(rowData)) return null
     if (!ignoreEmpty && rowData.length === 0) return null
@@ -236,7 +236,7 @@ function BillSheet({
     sheetRange = ss.getRange(2, 1, ss.getLastRow() - 1, ss.getLastColumn())
     sheetData = sheetRange.getValues()
 
-    for (const sData of newData) {
+    for (let sData of newData) {
       if (isValidObject(sData)) {
         sData = _transformData(sData)
         let found = false
@@ -248,7 +248,7 @@ function BillSheet({
             for (const idProp of idProps) {
               if (!isEmptyVariable(sData[ idProp ])) {
                 const idindex = path[ idProp ]
-                if (idindex && idindex >= 0 && smartCompare(sheetData[ i ][ idindex ], sData[ idProp ])) {
+                if (idindex >= 0 && smartCompare(sheetData[ i ][ idindex ], sData[ idProp ])) {
                   matchCnt++
                 }
               }
@@ -262,17 +262,18 @@ function BillSheet({
                   if(isValidObject(cbData)) sData = cbData
                 }
                 sData = _transformAppend(sData)
-                function __updateRow(id) {
+                function __updateRow(key) {
+                  const id = path[key]
                   if (id >= 0) {
                     anyRowToUpdate = true
-                    if (isEmptyVariable(sData[ j ])) sData[ j ] = ''
-                    sheetData[ i ][ id ] = sData[ j ]
+                    if (isEmptyVariable(sData[ key ])) sData[ key ] = ''
+                    sheetData[ i ][ id ] = sData[ key ]
                   }
                 }
                 if (isValidObject(map)) {
-                  for (const j in map) __updateRow(path[ map[ j ] ])
+                  for (const j in map) __updateRow(map[ j ])
                 } else {
-                  for (const j in sData) __updateRow(path[ j ])
+                  for (const j in sData) __updateRow(j)
                 }
               }
             }
