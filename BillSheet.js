@@ -91,6 +91,7 @@ function BillSheet({
     } else if(transform) {
       for (const i in transform) __transform(i)
     }
+    return data
   }
   
   /**
@@ -256,7 +257,6 @@ function BillSheet({
               found = true
               const rData = _toJSON(sheetData[ i ])
               if (!onlyUpdateOnChange || !compareObject(sData, rData, map)) {
-                console.log('Detected data changes', sData)
                 if (beforeChange && typeof beforeChange === 'function') {
                   let cbData = beforeChange(rData, sData)
                   if(isValidObject(cbData)) sData = cbData
