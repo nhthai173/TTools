@@ -250,3 +250,42 @@ function isValidArray(arr = []){
   }
   return false
 }
+
+
+
+/**
+ * Get timestamp
+ * @param {Date|string|number} date
+ * @returns {number|null} timestamp
+ */
+function toTimestamp(date) {
+  const moment = Moment.load()
+  if (date.getTime) {
+    try {
+      date = date.getTime()
+      if (isNaN(date)) return null
+      return date
+    } catch (e) { }
+  } else if (typeof date === 'string') {
+    const match1 = date.match(/\-/g)
+    const match2 = date.match(/\//g)
+    let dateMoment = null
+    if (match1 && match1.length === 2 && !match2) {
+      dateMoment = moment(date, 'YYYY-MM-DD')
+    } else if (match2 && match2.length === 2 && !match1) {
+      dateMoment = moment(date, 'DD/MM/YYYY')
+    }
+    if (dateMoment && dateMoment.isValid()) {
+      return dateMoment.toDate().getTime()
+    } else {
+      date = parseFloat(date)
+    }
+  }
+  if (typeof date === 'number') {
+    if (date > 1000000000000)
+      return date
+    else if (date > 1000000000)
+      return date * 1000
+  }
+  return null
+}
