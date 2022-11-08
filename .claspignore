@@ -1,0 +1,6 @@
+Docs
+Docs/*
+out
+out/*
+.vscode
+.vscode/*
