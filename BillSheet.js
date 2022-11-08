@@ -56,7 +56,7 @@ function BillSheet({
    * @param {[]} rowData 
    * @returns {{}|null}
    */
-  function _toJSON(rowData = [], { 
+  function _toJSON(rowData = [], {
     ignoreEmpty = true,
     ignoreGetTransform = false
   } = {}) {
@@ -67,7 +67,7 @@ function BillSheet({
     for (const prop in path) {
       output[ prop ] = rowData[ path[ prop ] ] || ''
     }
-    if(!ignoreGetTransform) output = _transformGet(output)
+    if (!ignoreGetTransform) output = _transformGet(output)
     return output
   }
 
@@ -88,18 +88,18 @@ function BillSheet({
     }
     if (!ignoreEmpty) {
       for (const i in data) __transform(i)
-    } else if(transform) {
+    } else if (transform) {
       for (const i in transform) __transform(i)
     }
     return data
   }
-  
+
   /**
    * Custom function before append to sheet
    * @param {{}} data row data
    * @returns {{}} transformed data
    */
-  function _transformAppend(data = {}, ignoreEmpty = false){
+  function _transformAppend(data = {}, ignoreEmpty = false) {
     if (!ignoreEmpty && !isValidObject(data)) return {}
     if (beforeAppend) {
       try {
@@ -259,11 +259,11 @@ function BillSheet({
               if (!onlyUpdateOnChange || !compareObject(sData, rData, map)) {
                 if (beforeChange && typeof beforeChange === 'function') {
                   let cbData = beforeChange(rData, sData)
-                  if(isValidObject(cbData)) sData = cbData
+                  if (isValidObject(cbData)) sData = cbData
                 }
                 sData = _transformAppend(sData)
                 function __updateRow(key) {
-                  const id = path[key]
+                  const id = path[ key ]
                   if (id >= 0) {
                     anyRowToUpdate = true
                     if (isEmptyVariable(sData[ key ])) sData[ key ] = ''
@@ -283,9 +283,9 @@ function BillSheet({
 
         // If can not match or found row, append new row
         if (!found && appendIfNotFound) {
-          if(beforeAppend && typeof beforeAppend === 'function'){
+          if (beforeAppend && typeof beforeAppend === 'function') {
             let aData = beforeAppend(sData)
-            if(isValidObject(aData)) sData = aData
+            if (isValidObject(aData)) sData = aData
           }
           appendList.push(sData)
         }
@@ -298,7 +298,7 @@ function BillSheet({
       anyChange = true
     }
     if (isValidArray(appendList)) {
-      anyChange = append(appendList, {ignoreDataTransform: true}) || anyChange
+      anyChange = append(appendList, { ignoreDataTransform: true }) || anyChange
     }
 
     return anyChange
@@ -507,7 +507,7 @@ function BillSheet({
     return toJSON()
   }
 
-  function toJSON({ignoreGetTransform = false} = {}) {
+  function toJSON({ ignoreGetTransform = false } = {}) {
     let out = []
     const ss = _sheet()
 

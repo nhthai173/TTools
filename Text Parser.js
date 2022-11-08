@@ -2,10 +2,9 @@
  * Trim a string
  *
  * @param {string} str input string
- * @param {*} { 
- *    includeSpecialChar: pass true if you want remove special characters stand at begin and end of the text
- * }
- * @return {*} 
+ * @param {Object} [options]
+ * @param {boolean} [options.includeSpecialChar=true] pass true if you want remove special characters stand at begin and end of the text
+ * @return {string} 
  */
 function trimText(str = '', { includeSpecialChar = true } = {}) {
   if (!str) return str
@@ -29,11 +28,10 @@ function trimText(str = '', { includeSpecialChar = true } = {}) {
  * Lowercase and remove all special characters, spaces, accent
  *
  * @param {string} str
- * @param {*} {
- *   removeSpecialChar: boolean,
- *   removeSpace: boolean,
- *   lowerCase: boolean
- * }
+ * @param {Object} [options]
+ * @param {boolean} [options.removeSpecialChar=true]
+ * @param {boolean} [options.removeSpace=true]
+ * @param {boolean} [options.lowerCase=true]
  * @return {string}
  */
 function toRawText(str = '', {
@@ -69,44 +67,49 @@ function toRawText(str = '', {
 
 
 /**
- * @param {*} a
+ * @param {any} a
  * @return {boolean} 
  */
-function parseBoolean(a){
-  if(isEmptyVariable(a)) return false
-  if(typeof a === 'boolean') return a
-  else if(typeof a === 'string'){
+function parseBoolean(a) {
+  if (isEmptyVariable(a)) return false
+  if (typeof a === 'boolean') return a
+  else if (typeof a === 'string') {
     a = a.toLowerCase()
-    if(a === "false") return false
-    if(a === "true") return true
+    if (a === "false") return false
+    if (a === "true") return true
   }
   return false
 }
 
 
 
-
+/**
+ * @typedef {Object} MatchFunctionOutput
+ * @property {string} name function name
+ * @property {string[]} parameters function parameters
+ */
 
 /**
  * Match function in a text
  * 
  * @param {string} str
- * @param {*} {removeParamQuote: boolean}
- * @return {*} 
+ * @param {Object} [options]
+ * @param {boolean} [options.removeParamQuote=true] remove " | ' | ` in function parameters
+ * @return {MatchFunctionOutput[]|null}
  */
-function matchFunction(str = '', {removeParamQuote = true} = {}){
+function matchFunction(str = '', { removeParamQuote = true } = {}) {
   let output = []
-  if(!str) return null
+  if (!str) return null
   let functions = str.split(';')
-  if(!functions.length) functions = [functions]
+  if (!functions.length) functions = [ functions ]
   functions.forEach(fn => {
     const matchParams = fn.match(/(?<=\().*(?=\))/g)
-    if(matchParams){
-      const fnd = {name: '', parameters: []}
-      fn = fn.replace('(' + matchParams[0] + ')', '')
+    if (matchParams) {
+      const fnd = { name: '', parameters: [] }
+      fn = fn.replace('(' + matchParams[ 0 ] + ')', '')
       fnd.name = fn.trim()
-      matchParams[0].split(',').forEach(p => {
-        if(removeParamQuote) p = p.replace(/\'|\"|\`/g, '')
+      matchParams[ 0 ].split(',').forEach(p => {
+        if (removeParamQuote) p = p.replace(/\'|\"|\`/g, '')
         fnd.parameters.push(p.trim())
       })
       output.push(fnd)
@@ -123,7 +126,7 @@ function matchFunction(str = '', {removeParamQuote = true} = {}){
 /**
  * Get timestamp
  * @param {Date|string|number} date
- * @returns {number|null} timestamp
+ * @return {number|null} timestamp
  */
 function toTimestamp(date) {
   if (!date) return null
@@ -172,11 +175,11 @@ function toTimestamp(date) {
  * @param {string} decimalSeparator
  * @return {number}
  */
-function parseCurrency(str = '', thousandSeparator = '.', decimalSeparator = ','){
+function parseCurrency(str = '', thousandSeparator = '.', decimalSeparator = ',') {
   let num = 0
   let isNegativeNum = false
-  if(!str) return num
-  if(thousandSeparator && decimalSeparator){
+  if (!str) return num
+  if (thousandSeparator && decimalSeparator) {
     const a = '\\-*\\d+\\'
       + thousandSeparator + '*\\d*\\'
       + thousandSeparator + '*\\d*\\'
@@ -184,25 +187,25 @@ function parseCurrency(str = '', thousandSeparator = '.', decimalSeparator = ','
       + thousandSeparator + '*\\d*\\'
       + thousandSeparator + '*\\d*\\'
       + thousandSeparator + '*\\d*\\'
-      + decimalSeparator  + '*\\d*'
+      + decimalSeparator + '*\\d*'
     const reg = new RegExp(a, 'g')
     let matched = str.match(reg)
-    if(matched){
-      matched = matched[0]
-      let [n, d] = matched.split(decimalSeparator)
-      if(n){
+    if (matched) {
+      matched = matched[ 0 ]
+      let [ n, d ] = matched.split(decimalSeparator)
+      if (n) {
         const matchNum = n.match(/\d/g)
-        if(matchNum) num = parseInt(matchNum.join(''))
-        if(n.startsWith('-')) {
+        if (matchNum) num = parseInt(matchNum.join(''))
+        if (n.startsWith('-')) {
           num *= -1
           isNegativeNum = true
         }
       }
-      if(d){
+      if (d) {
         const matchNum = d.match(/\d/g)
-        if(matchNum) d = parseInt(matchNum.join(''))
-        while(d > 1) d /= 10
-        if(isNegativeNum) d *= -1
+        if (matchNum) d = parseInt(matchNum.join(''))
+        while (d > 1) d /= 10
+        if (isNegativeNum) d *= -1
         num += d
       }
     }

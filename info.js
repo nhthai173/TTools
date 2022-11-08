@@ -1,15 +1,15 @@
-function getLibraryInfo () {
+function getLibraryInfo() {
 
-  return { 
+  return {
     info: {
-      name:'TTools',
-      version:'1.0.0',
+      name: 'TTools',
+      version: '1.0.0',
       id: '1Mrg9qMVfIoLs3bVVrM987kJe4DcahVxhBcEJGW2YuT3UpLeAgDMnwzLl',
-      description:'nht libraries',
+      description: 'nht libraries',
     },
-    dependencies:[
+    dependencies: [
     ]
-  }; 
+  };
 }
 
 
@@ -17,7 +17,7 @@ function getLibraryInfo () {
  * List of project used this Lib
  * Dùng để cập nhật thủ công cho các project đó lên phiên bản mới nhất của Lib
  */
-function getUsedList(){
+function getUsedList() {
   return [
     {
       name: 'Notion chart',
