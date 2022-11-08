@@ -1,7 +1,11 @@
 /**
  * Trim a string
- * @param {string} input string
- * @param {{}} options. includeSpecialChar: pass true if you want remove special characters stand at begin and end of the text
+ *
+ * @param {string} str input string
+ * @param {*} { 
+ *    includeSpecialChar: pass true if you want remove special characters stand at begin and end of the text
+ * }
+ * @return {*} 
  */
 function trimText(str = '', { includeSpecialChar = true } = {}) {
   if (!str) return str
@@ -22,9 +26,15 @@ function trimText(str = '', { includeSpecialChar = true } = {}) {
 
 
 /**
- * lowercase and remove all special characters, spaces, accent
- * @param str string
- * @return string
+ * Lowercase and remove all special characters, spaces, accent
+ *
+ * @param {string} str
+ * @param {*} {
+ *   removeSpecialChar: boolean,
+ *   removeSpace: boolean,
+ *   lowerCase: boolean
+ * }
+ * @return {string}
  */
 function toRawText(str = '', {
   removeSpecialChar = true,
@@ -59,7 +69,8 @@ function toRawText(str = '', {
 
 
 /**
- * param {*} a
+ * @param {*} a
+ * @return {boolean} 
  */
 function parseBoolean(a){
   if(isEmptyVariable(a)) return false
@@ -77,8 +88,11 @@ function parseBoolean(a){
 
 
 /**
- * Match function in a string text
+ * Match function in a text
+ * 
  * @param {string} str
+ * @param {*} {removeParamQuote: boolean}
+ * @return {*} 
  */
 function matchFunction(str = '', {removeParamQuote = true} = {}){
   let output = []
@@ -142,4 +156,56 @@ function toTimestamp(date) {
       return date * 1000
   }
   return null
+}
+
+
+
+
+
+
+
+
+/**
+ * Parse currency to number with thousandSeparator and decimalSeparator provided
+ * @param {string} str
+ * @param {string} thousandSeparator
+ * @param {string} decimalSeparator
+ * @return {number}
+ */
+function parseCurrency(str = '', thousandSeparator = '.', decimalSeparator = ','){
+  let num = 0
+  let isNegativeNum = false
+  if(!str) return num
+  if(thousandSeparator && decimalSeparator){
+    const a = '\\-*\\d+\\'
+      + thousandSeparator + '*\\d*\\'
+      + thousandSeparator + '*\\d*\\'
+      + thousandSeparator + '*\\d*\\'
+      + thousandSeparator + '*\\d*\\'
+      + thousandSeparator + '*\\d*\\'
+      + thousandSeparator + '*\\d*\\'
+      + decimalSeparator  + '*\\d*'
+    const reg = new RegExp(a, 'g')
+    let matched = str.match(reg)
+    if(matched){
+      matched = matched[0]
+      let [n, d] = matched.split(decimalSeparator)
+      if(n){
+        const matchNum = n.match(/\d/g)
+        if(matchNum) num = parseInt(matchNum.join(''))
+        if(n.startsWith('-')) {
+          num *= -1
+          isNegativeNum = true
+        }
+      }
+      if(d){
+        const matchNum = d.match(/\d/g)
+        if(matchNum) d = parseInt(matchNum.join(''))
+        while(d > 1) d /= 10
+        if(isNegativeNum) d *= -1
+        num += d
+      }
+    }
+  }
+  return num
 }
