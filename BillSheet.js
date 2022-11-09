@@ -4,7 +4,7 @@
   * @param {Object} options
   * @param {string} options.sheetId Google Sheet ID
   * @param {string} options.sheetName Google Sheet Name
-  * @param {{}} [options.path] Pairs of key and column index
+  * @param {{}} options.path Pairs of key and column index
   * @param {string} [options.sortProp] Name of property to sort
   * @param {string} [options.sortType] sortProp type, "number" | "string"
   * @param {string[]} [options.emptyPropList] List of property name. If these properties of row are empty, the row will be removed
@@ -235,7 +235,7 @@ function BillSheet({
    * @param {Object} [options]
    * @param {Boolean} [options.appendIfNotFound=true] Pass true to append new rows if not found.
    * @param {Boolean} [options.onlyUpdateOnChange=false] Pass true to update only if the value is changed.
-   * @param {[]} [options.map=[]] Properties list. If provided, only compare these properties. If not provided, compare all properties in `data`.
+   * @param {[]} [options.map=[]] Properties list. If provided, only compare and update these properties. If not provided, compare and update all properties in `data`.
    * @param {beforeAppendCB} [options.beforeAppend] Callback function to transform data before append. If provided, it will be ignored default `beforeAppend`. If this function returns non-valid Object, It will be continued with the old data. Only called if `appendIfNotFound` is true.
    * @param {beforeChangeCB} [options.beforeChange] Callback function to transform data before change. It will be called before default `beforeAppend` option. If this function returns non-valid Object, It will be continued with the old data.
    * @param {Boolean} [options.ignoreTransformOnChange] Pass true to ignore default `beforeAppend` option when update.
@@ -246,7 +246,7 @@ function BillSheet({
     let newData = []
     let sheetRange = null
     let sheetData = null
-    let appendList = []
+    let appendList = [] // contains rows (as Object) to append
     let anyRowToUpdate = false
     let anyChange = false
 
@@ -581,18 +581,29 @@ function BillSheet({
     return out
   }
 
-  return {
-    update,
-    append,
-    toJSON,
-    prettify,
-    /* DEPRECATED */
-    sort,
-    getAsJSON,
-    updateRow
-  }
+  this.update = update
+  this.append = append
+  this.toJSON = toJSON
+  this.prettify = prettify
+  /* DEPRECATED */
+  this.sort = sort
+  this.getAsJSON = getAsJSON
+  this.updateRow = updateRow
+  return this
+  // return {
+  //   update,
+  //   append,
+  //   toJSON,
+  //   prettify,
+  //   /* DEPRECATED */
+  //   sort,
+  //   getAsJSON,
+  //   updateRow
+  // }
 
 }
+
+BillSheet.prototype.constructor = BillSheet
 
 
 
