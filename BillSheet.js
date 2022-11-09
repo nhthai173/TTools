@@ -1,7 +1,6 @@
 /**
   * Easiest way to interact with GSheet
   * 
-  * @class
   * @param {Object} options
   * @param {string} options.sheetId Google Sheet ID
   * @param {string} options.sheetName Google Sheet Name
@@ -29,7 +28,9 @@ function BillSheet({
   fCustom // deprecated
 } = {}) {
 
-  // Default variables (deprecated)
+  /** 
+   * @deprecated Default variables
+   */ 
   const D_SHEET_ID = '13P0_OQ_-AjOM2q2zNKsgCAzWuOkNRYw8Z9LV8m8qXcc'
 
   // Check options input
@@ -47,7 +48,11 @@ function BillSheet({
   if (typeof afterGet !== 'function') afterGet = null
 
 
-  // Get sheet as Sheet
+  /**
+   * Return sheet object
+   * 
+   * @return {GoogleAppsScript.Spreadsheet.Sheet}
+   */
   function _sheet() {
     if (sheetId && sheetName)
       return SpreadsheetApp.openById(sheetId).getSheetByName(sheetName)
@@ -59,7 +64,11 @@ function BillSheet({
 
   /**
    * Get a row data as an object
-   * @param {[]} rowData 
+   * 
+   * @param {[]} rowData
+   * @param {Object} [options]
+   * @param {Boolean} [options.ignoreEmpty=true] Pass false to get `null`. Otherwise return `{}`
+   * @param {Boolean} [options.ignoreGetTransform=false] Pass true to ignore `afterGet` transform
    * @returns {{}|null}
    */
   function _toJSON(rowData = [], {
@@ -78,8 +87,10 @@ function BillSheet({
   }
 
   /**
-   * Custom transform function
-   * @param {{}} data row data
+   * Transform row data by `transform` option
+   * 
+   * @param {{}} data rowData
+   * @param {Boolean} [ignoreEmpty=false] Pass true to get transformed all properties (in `transform` option) even if the value is empty. Otherwise only transform non-empty properties in `rowData`.
    * @returns {{}} transformed data
    */
   function _transformData(data = {}, ignoreEmpty = false) {
@@ -101,8 +112,10 @@ function BillSheet({
   }
 
   /**
-   * Custom function before append to sheet
-   * @param {{}} data row data
+   * Transform row data by `beforeAppend` option. Only transform if `beforeAppend()` return valid Object. Otherwise return old `rowData`
+   * 
+   * @param {{}} data rowData
+   * @param {Boolean} [ignoreEmpty=false] If true, return `{}` if `rowData` is empty.
    * @returns {{}} transformed data
    */
   function _transformAppend(data = {}, ignoreEmpty = false) {
@@ -117,8 +130,10 @@ function BillSheet({
   }
 
   /**
-   * Custom function after get from sheet
-   * @param {{}} data row data
+   * Transform data by `afterGet` option. Only transform if `afterGet()` return valid Object. Otherwise return old `data`
+   * 
+   * @param {{}} data
+   * @param {Boolean} [ignoreEmpty=false] If true, return `{}` if `rowData` is empty.
    * @returns {{}} transformed data
    */
   function _transformGet(data = {}, ignoreEmpty = false) {
@@ -133,11 +148,11 @@ function BillSheet({
   }
 
   /**
-   * Deprecated
-   * @param {String} prop property name or "AND","OR"
+   * @deprecated
+   * @param {string} prop property name or "AND","OR"
    * @param {*} value property value or table of prop-value pairs
    * @param {Array} row row data
-   * @return {Boolean}
+   * @return {Boolean} Return true if matched
    */
   function matchRow(prop, value, row = []) {
     if (!isEmptyVariable(prop) && !isEmptyVariable(value) && isValidArray(row)) {
@@ -162,13 +177,15 @@ function BillSheet({
   }
 
   /**
-   * Deprecated
-   * Find a row and update it data
+   * @deprecated DEPRECATED: Use `update()` instead.
+   * Find a row and update it
+   * 
    * @param {{}} query property name or "AND","OR"
    * eg. query = {"name": "test"}
    * eg. query = {"AND": {"name": "foo", "type": "bar"}}
    * Available: "AND", "OR"
-   * @param {{}} nData row data
+   * @param {{}} nData rowData
+   * @return {Boolean} Return true if success update
    */
   function updateRow(query = {}, nData = {}) {
     if (isValidObject(query) && isValidObject(nData)) {
@@ -198,7 +215,7 @@ function BillSheet({
       }
       if (anyChange) {
         range.setValues(data)
-        sort()
+        prettify()
         return true
       } else {
         return append(nData)
@@ -211,12 +228,20 @@ function BillSheet({
 
 
   /**
-   * Update existing rows or or append new rows if not exist.
-   * @ Which rows to update is determined by value of each item in `idProps`. If `idProps` is not provided, append new rows.
-   * @param {{}|{}[]} data 
-   * @param {String[]} idProps List of properties to update existing row
+   * Update existing rows or append new rows if not exist.
+   * 
+   * @param {{}|{}[]} data rowData or sheetData (Object or Array of Objects)
+   * @param {string[]} idProps List of properties to determine which rows to update. If not provided, append new rows.
+   * @param {Object} [options]
+   * @param {Boolean} [options.appendIfNotFound=true] Pass true to append new rows if not found.
+   * @param {Boolean} [options.onlyUpdateOnChange=false] Pass true to update only if the value is changed.
+   * @param {[]} [options.map=[]] Properties list. If provided, only compare these properties. If not provided, compare all properties in `data`.
+   * @param {beforeAppendCB} [options.beforeAppend] Callback function to transform data before append. If provided, it will be ignored default `beforeAppend`. If this function returns non-valid Object, It will be continued with the old data. Only called if `appendIfNotFound` is true.
+   * @param {beforeChangeCB} [options.beforeChange] Callback function to transform data before change. It will be called before default `beforeAppend` option. If this function returns non-valid Object, It will be continued with the old data.
+   * @param {Boolean} [options.ignoreTransformOnChange] Pass true to ignore default `beforeAppend` option when update.
+   * @return {Boolean} Return true if success update or append
    */
-  function update(data, idProps = [], { appendIfNotFound = true, onlyUpdateOnChange = false, map = {}, beforeAppend, beforeChange } = {}) {
+  function update(data, idProps = [], { appendIfNotFound = true, onlyUpdateOnChange = false, ignoreTransformOnChange = false, map = [], beforeAppend, beforeChange } = {}) {
     const isIdPropsValid = isValidArray(idProps)
     let newData = []
     let sheetRange = null
@@ -224,6 +249,9 @@ function BillSheet({
     let appendList = []
     let anyRowToUpdate = false
     let anyChange = false
+
+    const isBeforeAppendAvailable = beforeAppend && typeof beforeAppend === 'function'
+    const isBeforeChangeAvailable = beforeChange && typeof beforeChange === 'function'
 
     // If data is object, convert to array
     if (isValidArray(data)) {
@@ -263,11 +291,13 @@ function BillSheet({
               found = true
               const rData = _toJSON(sheetData[ i ])
               if (!onlyUpdateOnChange || !compareObject(sData, rData, map)) {
-                if (beforeChange && typeof beforeChange === 'function') {
+                if (isBeforeChangeAvailable) {
                   let cbData = beforeChange(rData, sData)
                   if (isValidObject(cbData)) sData = cbData
                 }
-                sData = _transformAppend(sData)
+                if (!ignoreTransformOnChange){
+                  sData = _transformAppend(sData)
+                }
                 function __updateRow(key) {
                   const id = path[ key ]
                   if (id >= 0) {
@@ -289,7 +319,7 @@ function BillSheet({
 
         // If can not match or found row, append new row
         if (!found && appendIfNotFound) {
-          if (beforeAppend && typeof beforeAppend === 'function') {
+          if (isBeforeAppendAvailable) {
             let aData = beforeAppend(sData)
             if (isValidObject(aData)) sData = aData
           }
@@ -300,11 +330,13 @@ function BillSheet({
 
     if (anyRowToUpdate) {
       sheetRange.setValues(sheetData)
-      sort()
+      prettify()
       anyChange = true
     }
     if (isValidArray(appendList)) {
-      anyChange = append(appendList, { ignoreDataTransform: true }) || anyChange
+      anyChange = append(appendList, { 
+        ignoreDataTransform: isBeforeAppendAvailable
+      }) || anyChange
     }
 
     return anyChange
@@ -314,7 +346,12 @@ function BillSheet({
 
   /**
    * Append data to new row in sheet.
-   * Return true if a new row added
+   * 
+   * @param {{}|{}[]} data Data to append. rowData or sheetData (Object or Array of Objects)
+   * @param {Object} [options]
+   * @param {Boolean} [options.ignoreDataTransform] Pass true to ignore default `transform` option.
+   * @param {Boolean} [options.ignoreAppendTransform] Pass true to ignore default `beforeAppend` option.
+   * @return Return true if a new row added
    */
   function append(data = {} || [], {
     ignoreAppendTransform = false,
@@ -332,7 +369,7 @@ function BillSheet({
         }
       }
       if (anySuccess) {
-        sort()
+        prettify()
         return true
       }
     } else if (isValidObject(data)) {
@@ -340,7 +377,7 @@ function BillSheet({
         ignoreAppendTransform,
         ignoreDataTransform
       })
-      if (add) sort()
+      if (add) prettify()
       return add
     }
     return false
@@ -349,7 +386,12 @@ function BillSheet({
 
   /**
    * Append data to new row in sheet.
-   * return true if success added
+   * 
+   * @param {{}} data rowData to append
+   * @param {Object} [options]
+   * @param {Boolean} [options.ignoreDataTransform] Pass true to ignore default `transform` option.
+   * @param {Boolean} [options.ignoreAppendTransform] Pass true to ignore default `beforeAppend` option.
+   * @return Return true if a new row added
    */
   function _append(data = {}, {
     ignoreAppendTransform = false,
@@ -399,10 +441,10 @@ function BillSheet({
 
 
   /**
-   * Sort sheet by `sortProp` and clear empty rows and duplicate rows
-   * @return void
+   * Sort sheet by `sortProp`, clear empty rows and duplicate rows
+   * @return {void}
    */
-  function sort() {
+  function prettify() {
     var props = { sortProp: '', emptyPropList: [], uniquePropList: [] }
     var temp = { uniquePropList: [] }
 
@@ -502,13 +544,20 @@ function BillSheet({
     }
   }
 
-
-  function prettify() {
-    sort()
+  /**
+   * @deprecated DEPRECATED: Use `prettify()` instead
+   * 
+   * Sort sheet by `sortProp`, clear empty rows and duplicate rows
+   * @return {void}
+   */
+  function sort() {
+    prettify()
   }
 
 
-  // Deprecated
+  /**
+   *  @deprecated DEPRECATED: Use `toJSON()` instead
+   */
   function getAsJSON() {
     return toJSON()
   }
@@ -533,13 +582,14 @@ function BillSheet({
   }
 
   return {
-    updateRow,
     update,
     append,
-    sort,
+    toJSON,
     prettify,
+    /* DEPRECATED */
+    sort,
     getAsJSON,
-    toJSON
+    updateRow
   }
 
 }
@@ -556,4 +606,11 @@ function BillSheet({
  * @callback afterGetCB
  * @param {{}} rowData rowData as Object type (converted based on `path`)
  * @return {{}|undefined} new rowData
+ */
+
+/**
+ * @callback beforeChangeCB
+ * @param {{}} oldData Old rowData in sheet
+ * @param {{}} newData New data to update
+ * @return {{}|undefined} Data to update
  */
