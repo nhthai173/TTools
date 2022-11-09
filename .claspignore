@@ -1,0 +1,8 @@
+Docs
+Docs/*
+out
+out/*
+out/scripts/*
+out/scripts/prettify/*
+.vscode
+.vscode/*

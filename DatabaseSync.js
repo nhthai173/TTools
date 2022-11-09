@@ -1,4 +1,4 @@
-function DatabaseSync({ notionToken = '', sheet = {}, data = [], sProps = [], nProps = [], idProp = [], databaseId = '', useDelete = false, useAdd = true, usePull = true, usePush = true, usePullNew = false, fCustomPush = (data, payload, pageId) => { }, fCustomPull = (data, pageId) => { } } = {}){
+function DatabaseSync({ notionToken = '', sheet = {}, data = [], sProps = [], nProps = [], idProp = [], databaseId = '', useDelete = false, useAdd = true, usePull = true, usePush = true, usePullNew = false, fCustomPush = (data, payload, pageId) => { }, fCustomPull = (data, pageId) => { } } = {}) {
   return new DatabaseSyncClass({ notionToken, sheet, data, sProps, nProps, idProp, databaseId, useDelete, useAdd, usePull, usePush, usePullNew, fCustomPush, fCustomPull })
 }
 
@@ -280,7 +280,7 @@ class DatabaseSyncClass {
             payload = fcall.payload || payload
           }
         }
-        new NotionAPI({token: this.notionToken}).updatePage(pageId, payload)
+        new NotionAPI({ token: this.notionToken }).updatePage(pageId, payload)
       }
     }
   }
@@ -313,7 +313,7 @@ class DatabaseSyncClass {
             payload = fcall.payload || payload
           }
         }
-        new NotionAPI({token: this.notionToken}).createPage({
+        new NotionAPI({ token: this.notionToken }).createPage({
           "parent": { "database_id": databaseId },
           ...payload
         })
@@ -322,7 +322,7 @@ class DatabaseSyncClass {
   }
   deleteDatabaseItems(pageId = '') {
     if (pageId)
-      new NotionAPI({token: this.notionToken}).deletePage(pageId)
+      new NotionAPI({ token: this.notionToken }).deletePage(pageId)
   }
   pullDataToSheet(data = {}) {
     if (data) {
