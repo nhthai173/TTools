@@ -1,13 +1,19 @@
 /**
+  * Easiest way to interact with GSheet
   * 
-  * @sheetName `String` sheet name
-  * @path `Object` table of props and index of sheet column
-  * @sortProp `string` prop to sort
-  * @sortType `string` sortProp type, number or string
-  * @emptyPropList `array` if these props are empty, that row will be removed
-  * @uniquePropList `array` if a row has duplicate value of these props, the duplicate rows will be removed
-  * @transform `Object` a table containing functions whose input is the value of prop of the same name and the output is saved to sheet
-  * @fCustom `function` data.map(fCustom), called before `transform`
+  * @class
+  * @param {Object} options
+  * @param {string} options.sheetId Google Sheet ID
+  * @param {string} options.sheetName Google Sheet Name
+  * @param {{}} [options.path] Pairs of key and column index
+  * @param {string} [options.sortProp] Name of property to sort
+  * @param {string} [options.sortType] sortProp type, "number" | "string"
+  * @param {string[]} [options.emptyPropList] List of property name. If these properties of row are empty, the row will be removed
+  * @param {string[]} [options.uniquePropList] List of property name. If there is more than one row with the same value of these properties, only the first row is kept, the rest will be removed.
+  * @param {{}} [options.transform] A table containing functions whose input is the value of property of the same name and the output is saved to sheet. These functions will be executed before the data is saved to the sheet and before the beforeAppend function is executed.
+  * @param {beforeAppendCB} [options.beforeAppend] A function that is called with the data of each row (as Object), before appending data to sheet.
+  * @param {afterGetCB} [options.afterGet] A function that is called with the data of each row (as Object), after getting data from sheet. 
+  * @param {Function} [options.fCustom] DEPRECATED
   */
 function BillSheet({
   sheetId = '',
@@ -18,9 +24,9 @@ function BillSheet({
   emptyPropList = [],
   uniquePropList = [],
   transform = {},
-  fCustom, // deprecated
   beforeAppend,
-  afterGet
+  afterGet,
+  fCustom // deprecated
 } = {}) {
 
   // Default variables (deprecated)
@@ -537,3 +543,17 @@ function BillSheet({
   }
 
 }
+
+
+
+/**
+ * @callback beforeAppendCB
+ * @param {{}} rowData rowData as Object type (converted based on `path`)
+ * @return {{}|undefined} new rowData
+ */
+
+/**
+ * @callback afterGetCB
+ * @param {{}} rowData rowData as Object type (converted based on `path`)
+ * @return {{}|undefined} new rowData
+ */
