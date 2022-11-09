@@ -94,6 +94,16 @@ function smartCompare(a, b, type = '') {
     if (a === undefined && b === undefined) return true
     if (a === null && b === null) return true
     if (a === '' && b === '') return true
+    const isaEmpty = isEmptyVariable(a, {
+      allowEmptyArray: true,
+      allowEmptyObject: true,
+    })
+    const isbEmpty = isEmptyVariable(b, {
+      allowEmptyArray: true,
+      allowEmptyObject: true,
+    })
+    if (isaEmpty && !isbEmpty) return false
+    if (!isaEmpty && isbEmpty) return false
 
     // Number
     if ((typeof a === 'number' && typeof b === 'number') || type === 'number') {
@@ -163,12 +173,18 @@ function compareObject(a, b, map = [], { ignoreEmpty = false, ignoreType = false
  * @param {Object} options 
  * @returns 
  */
-function isEmptyVariable(a, { allowZero = true, allowEmtyString = false, evenString = false } = {}) {
+function isEmptyVariable(a, { 
+  allowZero = true,
+  allowEmtyString = false,
+  evenString = false ,
+  allowEmptyArray = false,
+  allowEmptyObject = false,
+} = {}) {
   if (a === undefined || a === null || (typeof a === 'number' && isNaN(a))) {
     return true
   }
-  if (Array.isArray(a) && a.length === 0) return true
-  if (typeof a === 'object' && Object.keys(a).length === 0) {
+  if (!allowEmptyArray && Array.isArray(a) && a.length === 0) return true
+  if (!allowEmptyObject && typeof a === 'object' && Object.keys(a).length === 0) {
     let emptyObj = {}
     emptyObj = emptyObj.toString()
     if (a.toString() === emptyObj) return true
