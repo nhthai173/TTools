@@ -262,6 +262,11 @@ function BillSheet({
       return false
     }
 
+    // If map is object, convert to array
+    if (isValidObject(map)) {
+      map = Object.keys(map).map(key => map[ key ])
+    }
+
     // Get current sheet data
     const ss = _sheet()
     if (ss === null) return false
@@ -306,7 +311,7 @@ function BillSheet({
                     sheetData[ i ][ id ] = sData[ key ]
                   }
                 }
-                if (isValidObject(map)) {
+                if (isValidArray(map)) {
                   for (const j in map) __updateRow(map[ j ])
                 } else {
                   for (const j in sData) __updateRow(j)
