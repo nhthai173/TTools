@@ -88,7 +88,7 @@ function getRanNum(len = 6) {
  */
 function smartCompare(a, b, {
   type = '',
-  allowEmpty = false,
+  allowEmpty = true,
   ignoreOrder = false
 } = {}) {
   let output = false
