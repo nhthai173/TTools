@@ -11,8 +11,8 @@
   * @param {string[]} [options.uniquePropList] List of property name. If there is more than one row with the same value of these properties, only the first row is kept, the rest will be removed.
   * @param {{}} [options.transform] A table containing functions whose input is the value of property of the same name and the output is saved to sheet. These functions will be executed before the data is saved to the sheet and before the beforeAppend function is executed.
   * @param {beforeAppendCB} [options.beforeAppend] A function that is called with the data of each row (as Object), before appending data to sheet.
-  * @param {afterGetCB} [options.afterGet] A function that is called with the data of each row (as Object), after getting data from sheet. 
-  * @param {Function} [options.fCustom] DEPRECATED
+  * @param {afterGetCB} [options.afterGet] A function that is called with the data of each row (as Object), after getting data from sheet.
+  * @return {BillSheetClass}
   */
 function BillSheet({
   sheetId = '',
@@ -24,42 +24,130 @@ function BillSheet({
   uniquePropList = [],
   transform = {},
   beforeAppend,
-  afterGet,
-  fCustom // deprecated
+  afterGet
 } = {}) {
 
-  /** 
-   * @deprecated Default variables
-   */ 
-  const D_SHEET_ID = '13P0_OQ_-AjOM2q2zNKsgCAzWuOkNRYw8Z9LV8m8qXcc'
+  return new BillSheetClass({
+    sheetId,
+    sheetName,
+    path,
+    sortProp,
+    sortType,
+    emptyPropList,
+    uniquePropList,
+    transform,
+    beforeAppend,
+    afterGet
+  })
 
-  // Check options input
-  if (isValidObject(transform)) {
-    for (let prop in transform) {
-      if (typeof transform[ prop ] !== 'function') {
-        transform[ prop ] = null
+}
+
+
+
+/**
+ * Easiest way to interact with GSheet
+ * @class
+ */
+class BillSheetClass {
+
+  /** 
+    * @param {Object} options
+    * @param {string} options.sheetId Google Sheet ID
+    * @param {string} options.sheetName Google Sheet Name
+    * @param {{}} options.path Pairs of key and column index
+    * @param {string} [options.sortProp] Name of property to sort
+    * @param {string} [options.sortType] sortProp type, "number" | "string"
+    * @param {string[]} [options.emptyPropList] List of property name. If these properties of row are empty, the row will be removed
+    * @param {string[]} [options.uniquePropList] List of property name. If there is more than one row with the same value of these properties, only the first row is kept, the rest will be removed.
+    * @param {{}} [options.transform] A table containing functions whose input is the value of property of the same name and the output is saved to sheet. These functions will be executed before the data is saved to the sheet and before the beforeAppend function is executed.
+    * @param {beforeAppendCB} [options.beforeAppend] A function that is called with the data of each row (as Object), before appending data to sheet.
+    * @param {afterGetCB} [options.afterGet] A function that is called with the data of each row (as Object), after getting data from sheet. 
+    * @param {Function} [options.fCustom] DEPRECATED
+    */
+  constructor({
+    sheetId = '',
+    sheetName = '',
+    path = {},
+    sortProp = '',
+    sortType = '',
+    emptyPropList = [],
+    uniquePropList = [],
+    transform = {},
+    beforeAppend,
+    afterGet,
+    fCustom // deprecated
+  } = {}) {
+
+    /** 
+     * @deprecated Default sheet id
+     */
+    const D_SHEET_ID = '13P0_OQ_-AjOM2q2zNKsgCAzWuOkNRYw8Z9LV8m8qXcc'
+
+    this.sheetId = sheetId || D_SHEET_ID
+    this.sheetName = sheetName || ''
+    this.path = path || {}
+    this.sortProp = sortProp || ''
+    this.sortType = sortType || ''
+    this.emptyPropList = emptyPropList || []
+    this.uniquePropList = uniquePropList || []
+
+    this.transform = {}
+    if (isValidObject(transform)) {
+      for (let prop in transform) {
+        if (typeof transform[ prop ] === 'function') {
+          this.transform[ prop ] = transform[ prop ]
+        }
       }
     }
-  } else {
-    transform = {}
+
+    if (typeof beforeAppend === 'function') this.beforeAppend = beforeAppend
+    else this.beforeAppend = null
+    if (typeof afterGet === 'function') this.afterGet = afterGet
+    else this.afterGet = null
+
   }
 
-  if (typeof beforeAppend !== 'function') beforeAppend = null
-  if (typeof afterGet !== 'function') afterGet = null
-
+  /**
+   * Log an error message
+   * 
+   * @param {string} type error type
+   * @param {string} msg message
+   * @return {void}
+   */
+  _errorLog(type = '', msg = '') {
+    console.error(msg)
+    if (type === 'sheet') {
+      console.error({
+        message: 'Cannot get sheet',
+        detail: {
+          sheetId: this.sheetId,
+          sheetName: this.sheetName
+        }
+      })
+    }
+    if (type === 'path') {
+      console.error({
+        message: 'Missing path',
+        detail: {
+          path: this.path
+        }
+      })
+    }
+  }
 
   /**
    * Return sheet object
    * 
    * @return {GoogleAppsScript.Spreadsheet.Sheet}
    */
-  function _sheet() {
+  _sheet() {
+    const { sheetId, sheetName } = this
     if (sheetId && sheetName)
       return SpreadsheetApp.openById(sheetId).getSheetByName(sheetName)
-    else if (sheetName && D_SHEET_ID)
-      return SpreadsheetApp.openById(D_SHEET_ID).getSheetByName(sheetName)
-    else
+    else {
+      this._errorLog('sheet')
       return null
+    }
   }
 
   /**
@@ -71,18 +159,22 @@ function BillSheet({
    * @param {Boolean} [options.ignoreGetTransform=false] Pass true to ignore `afterGet` transform
    * @returns {{}|null}
    */
-  function _toJSON(rowData = [], {
+  _toJSON(rowData = [], {
     ignoreEmpty = true,
     ignoreGetTransform = false
   } = {}) {
+    const { path } = this
     let output = {}
     if (!Array.isArray(rowData)) return null
     if (!ignoreEmpty && rowData.length === 0) return null
-    if (!isValidObject(path)) return null
+    if (!isValidObject(path)) {
+      this._errorLog('path')
+      return null
+    }
     for (const prop in path) {
       output[ prop ] = rowData[ path[ prop ] ] || ''
     }
-    if (!ignoreGetTransform) output = _transformGet(output)
+    if (!ignoreGetTransform) output = this._transformGet(output)
     return output
   }
 
@@ -93,7 +185,8 @@ function BillSheet({
    * @param {Boolean} [ignoreEmpty=false] Pass true to get transformed all properties (in `transform` option) even if the value is empty. Otherwise only transform non-empty properties in `rowData`.
    * @returns {{}} transformed data
    */
-  function _transformData(data = {}, ignoreEmpty = false) {
+  _transformData(data = {}, ignoreEmpty = false) {
+    const { transform } = this
     if (!ignoreEmpty && !isValidObject(data)) return {}
     function __transform(prop = '') {
       if (transform[ prop ]) {
@@ -118,11 +211,11 @@ function BillSheet({
    * @param {Boolean} [ignoreEmpty=false] If true, return `{}` if `rowData` is empty.
    * @returns {{}} transformed data
    */
-  function _transformAppend(data = {}, ignoreEmpty = false) {
+  _transformAppend(data = {}, ignoreEmpty = false) {
     if (!ignoreEmpty && !isValidObject(data)) return {}
-    if (beforeAppend) {
+    if (this.beforeAppend) {
       try {
-        let tData = beforeAppend(data)
+        let tData = this.beforeAppend(data)
         if (isValidObject(tData)) data = tData
       } catch (e) { console.error(`Error at beforeAppend`, e) }
     }
@@ -136,11 +229,11 @@ function BillSheet({
    * @param {Boolean} [ignoreEmpty=false] If true, return `{}` if `rowData` is empty.
    * @returns {{}} transformed data
    */
-  function _transformGet(data = {}, ignoreEmpty = false) {
+  _transformGet(data = {}, ignoreEmpty = false) {
     if (!ignoreEmpty && !isValidObject(data)) return {}
-    if (afterGet) {
+    if (this.afterGet) {
       try {
-        let tData = afterGet(data)
+        let tData = this.afterGet(data)
         if (isValidObject(tData)) data = tData
       } catch (e) { console.error(`Error at afterGet`, e) }
     }
@@ -154,19 +247,20 @@ function BillSheet({
    * @param {Array} row row data
    * @return {Boolean} Return true if matched
    */
-  function matchRow(prop, value, row = []) {
+  matchRow(prop, value, row = []) {
+    const { path } = this
     if (!isEmptyVariable(prop) && !isEmptyVariable(value) && isValidArray(row)) {
       if (prop == 'AND') {
         let cnt = 0
         let pLen = Object.keys(value).length
         for (const i in value) {
-          if (matchRow(i, value[ i ], row)) cnt++
+          if (this.matchRow(i, value[ i ], row)) cnt++
         }
         if (cnt == pLen) return true
       } else if (prop == 'OR') {
         let cnt = 0
         for (const i in value) {
-          if (matchRow(i, value[ i ], row)) cnt++
+          if (this.matchRow(i, value[ i ], row)) cnt++
         }
         if (cnt > 0) return true
       } else if (path[ prop ] >= 0) {
@@ -175,6 +269,7 @@ function BillSheet({
     }
     return false
   }
+
 
   /**
    * @deprecated DEPRECATED: Use `update()` instead.
@@ -187,20 +282,21 @@ function BillSheet({
    * @param {{}} nData rowData
    * @return {Boolean} Return true if success update
    */
-  function updateRow(query = {}, nData = {}) {
+  updateRow(query = {}, nData = {}) {
+    const { path } = this
     if (isValidObject(query) && isValidObject(nData)) {
       let anyChange = false
-      const ss = _sheet()
+      const ss = this._sheet()
 
       if (ss === null) return false
-      if (ss.getLastRow() < 2) return append(nData)
+      if (ss.getLastRow() < 2) return this.append(nData)
 
       const range = ss.getRange(2, 1, ss.getLastRow() - 1, ss.getLastColumn())
       let data = range.getValues()
       for (const i in data) {
         let cnt = 0
         for (const j in query) {
-          if (matchRow(j, query[ j ], data[ i ]))
+          if (this.matchRow(j, query[ j ], data[ i ]))
             cnt++
         }
         if (cnt == Object.keys(query).length) {
@@ -215,16 +311,17 @@ function BillSheet({
       }
       if (anyChange) {
         range.setValues(data)
-        prettify()
+        this.prettify()
         return true
       } else {
-        return append(nData)
+        return this.append(nData)
       }
 
     }
 
     return false
   }
+
 
 
   /**
@@ -241,7 +338,15 @@ function BillSheet({
    * @param {Boolean} [options.ignoreTransformOnChange] Pass true to ignore default `beforeAppend` option when update.
    * @return {Boolean} Return true if success update or append
    */
-  function update(data, idProps = [], { appendIfNotFound = true, onlyUpdateOnChange = false, ignoreTransformOnChange = false, map = [], beforeAppend, beforeChange } = {}) {
+  update(data, idProps = [], {
+    appendIfNotFound = true,
+    onlyUpdateOnChange = false,
+    ignoreTransformOnChange = false,
+    map = [],
+    beforeAppend,
+    beforeChange
+  } = {}) {
+    const { path } = this
     const isIdPropsValid = isValidArray(idProps)
     let newData = []
     let sheetRange = null
@@ -268,16 +373,16 @@ function BillSheet({
     }
 
     // Get current sheet data
-    const ss = _sheet()
+    const ss = this._sheet()
     if (ss === null) return false
-    if (ss.getLastRow() < 2) return append(newData)
+    if (ss.getLastRow() < 2) return this.append(newData)
 
     sheetRange = ss.getRange(2, 1, ss.getLastRow() - 1, ss.getLastColumn())
     sheetData = sheetRange.getValues()
 
     for (let sData of newData) {
       if (isValidObject(sData)) {
-        sData = _transformData(sData)
+        sData = this._transformData(sData)
         let found = false
 
         // Find in sheetData
@@ -294,14 +399,14 @@ function BillSheet({
             }
             if (matchCnt == idProps.length) {
               found = true
-              const rData = _toJSON(sheetData[ i ])
+              const rData = this._toJSON(sheetData[ i ])
               if (!onlyUpdateOnChange || !compareObject(sData, rData, map)) {
                 if (isBeforeChangeAvailable) {
                   let cbData = beforeChange(rData, sData)
                   if (isValidObject(cbData)) sData = cbData
                 }
-                if (!ignoreTransformOnChange){
-                  sData = _transformAppend(sData)
+                if (!ignoreTransformOnChange) {
+                  sData = this._transformAppend(sData)
                 }
                 function __updateRow(key) {
                   const id = path[ key ]
@@ -335,11 +440,11 @@ function BillSheet({
 
     if (anyRowToUpdate) {
       sheetRange.setValues(sheetData)
-      prettify()
+      this.prettify()
       anyChange = true
     }
     if (isValidArray(appendList)) {
-      anyChange = append(appendList, { 
+      anyChange = this.append(appendList, {
         ignoreDataTransform: isBeforeAppendAvailable
       }) || anyChange
     }
@@ -349,6 +454,8 @@ function BillSheet({
   }
 
 
+
+
   /**
    * Append data to new row in sheet.
    * 
@@ -356,9 +463,9 @@ function BillSheet({
    * @param {Object} [options]
    * @param {Boolean} [options.ignoreDataTransform] Pass true to ignore default `transform` option.
    * @param {Boolean} [options.ignoreAppendTransform] Pass true to ignore default `beforeAppend` option.
-   * @return Return true if a new row added
+   * @return {Boolean} Return true if a new row added
    */
-  function append(data = {} || [], {
+  append(data = {} || [], {
     ignoreAppendTransform = false,
     ignoreDataTransform = false
   } = {}) {
@@ -366,7 +473,7 @@ function BillSheet({
       let anySuccess = false
       for (const i in data) {
         if (isValidObject(data[ i ])) {
-          const add = _append(data[ i ], {
+          const add = this._append(data[ i ], {
             ignoreAppendTransform,
             ignoreDataTransform
           })
@@ -374,19 +481,20 @@ function BillSheet({
         }
       }
       if (anySuccess) {
-        prettify()
+        this.prettify()
         return true
       }
     } else if (isValidObject(data)) {
-      const add = _append(data, {
+      const add = this._append(data, {
         ignoreAppendTransform,
         ignoreDataTransform
       })
-      if (add) prettify()
+      if (add) this.prettify()
       return add
     }
     return false
   }
+
 
 
   /**
@@ -398,14 +506,16 @@ function BillSheet({
    * @param {Boolean} [options.ignoreAppendTransform] Pass true to ignore default `beforeAppend` option.
    * @return Return true if a new row added
    */
-  function _append(data = {}, {
+  _append(data = {}, {
     ignoreAppendTransform = false,
     ignoreDataTransform = false
   } = {}) {
+    const { path } = this
+
     // Nothing to append
     if (!isValidObject(data)) return false
 
-    const ss = _sheet()
+    const ss = this._sheet()
     if (ss === null) return false
 
     // create new Row array
@@ -423,8 +533,8 @@ function BillSheet({
 
     // check if a empty new row
     let isNewRowEmpty = true
-    if (!ignoreDataTransform) data = _transformData(data)
-    if (!ignoreAppendTransform) data = _transformAppend(data)
+    if (!ignoreDataTransform) data = this._transformData(data)
+    if (!ignoreAppendTransform) data = this._transformAppend(data)
     for (const i in path) {
       if (data[ i ] !== undefined)
         newRow[ path[ i ] ] = data[ i ]
@@ -445,13 +555,18 @@ function BillSheet({
   }
 
 
+
+
+
+
   /**
    * Sort sheet by `sortProp`, clear empty rows and duplicate rows
    * @return {void}
    */
-  function prettify() {
-    var props = { sortProp: '', emptyPropList: [], uniquePropList: [] }
-    var temp = { uniquePropList: [] }
+  prettify() {
+    const { path, sortProp, sortType, emptyPropList, uniquePropList } = this
+    let props = { sortProp: '', emptyPropList: [], uniquePropList: [] }
+    let temp = { uniquePropList: [] }
 
     // check all prop provided
     for (const i in path) {
@@ -473,7 +588,7 @@ function BillSheet({
     }
 
     if (props.sortProp || props.emptyPropList.length || props.uniquePropList.length) {
-      const ss = _sheet()
+      const ss = this._sheet()
       if (ss === null) return
       if (ss.getLastRow() < 2) return
 
@@ -549,34 +664,44 @@ function BillSheet({
     }
   }
 
+
   /**
    * @deprecated DEPRECATED: Use `prettify()` instead
    * 
    * Sort sheet by `sortProp`, clear empty rows and duplicate rows
    * @return {void}
    */
-  function sort() {
-    prettify()
+  sort() {
+    this.prettify()
   }
+
 
 
   /**
    *  @deprecated DEPRECATED: Use `toJSON()` instead
    */
-  function getAsJSON() {
-    return toJSON()
+  getAsJSON() {
+    return this.toJSON()
   }
 
-  function toJSON({ ignoreGetTransform = false } = {}) {
+
+  /**
+   * Return sheet data as JSON
+   * 
+   * @param {Object} options 
+   * @param {Boolean} [options.ignoreGetTransform=false] Pass true to ignore default `afterGet` option.
+   * @returns {{}} Sheet data
+   */
+  toJSON({ ignoreGetTransform = false } = {}) {
     let out = []
-    const ss = _sheet()
+    const ss = this._sheet()
 
     if (ss === null) return out
     if (ss.getLastRow() < 2) return out
 
     let data = ss.getRange(2, 1, ss.getLastRow() - 1, ss.getLastColumn()).getValues()
     for (const i in data) {
-      const sData = _toJSON(data[ i ], {
+      const sData = this._toJSON(data[ i ], {
         ignoreEmpty: false,
         ignoreGetTransform
       })
@@ -586,29 +711,9 @@ function BillSheet({
     return out
   }
 
-  this.update = update
-  this.append = append
-  this.toJSON = toJSON
-  this.prettify = prettify
-  /* DEPRECATED */
-  this.sort = sort
-  this.getAsJSON = getAsJSON
-  this.updateRow = updateRow
-  return this
-  // return {
-  //   update,
-  //   append,
-  //   toJSON,
-  //   prettify,
-  //   /* DEPRECATED */
-  //   sort,
-  //   getAsJSON,
-  //   updateRow
-  // }
+
 
 }
-
-BillSheet.prototype.constructor = BillSheet
 
 
 
