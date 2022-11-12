@@ -1,9 +1,24 @@
+/**
+ * @typedef {Object} NOTION_DATA_TYPE
+ * @property {string} title Database title
+ * @property {string} rich_text Plain text
+ * @property {string} number Number
+ * @property {string} status Status
+ * @property {string} select Select option
+ * @property {string} multi_select Multi select option
+ * @property {string} relation Page relation
+ * @property {string} checkbox Checkbox
+ * @property {string} url URL
+ * @property {string} email Email
+ * @property {string} phone_number Phone number
+ * @property {string} date Date
+ */
 const NOTION_DATA_TYPE = {
   title: 'title',
   rich_text: 'rich_text',
-  select: 'select',
   number: 'number',
   status: 'status',
+  select: 'select',
   multi_select: 'multi_select',
   relation: 'relation',
   checkbox: 'checkbox',
