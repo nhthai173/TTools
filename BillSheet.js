@@ -30,7 +30,7 @@ function BillSheet({
 
   /** 
    * @deprecated Default variables
-   */ 
+   */
   const D_SHEET_ID = '13P0_OQ_-AjOM2q2zNKsgCAzWuOkNRYw8Z9LV8m8qXcc'
 
   // Check options input
@@ -300,7 +300,7 @@ function BillSheet({
                   let cbData = beforeChange(rData, sData)
                   if (isValidObject(cbData)) sData = cbData
                 }
-                if (!ignoreTransformOnChange){
+                if (!ignoreTransformOnChange) {
                   sData = _transformAppend(sData)
                 }
                 function __updateRow(key) {
@@ -339,7 +339,7 @@ function BillSheet({
       anyChange = true
     }
     if (isValidArray(appendList)) {
-      anyChange = append(appendList, { 
+      anyChange = append(appendList, {
         ignoreDataTransform: isBeforeAppendAvailable
       }) || anyChange
     }

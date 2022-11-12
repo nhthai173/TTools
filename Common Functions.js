@@ -141,22 +141,22 @@ function smartCompare(a, b, {
       for (const i in a) {
         const aiIsEmpty = isEmptyVariable(a[ i ])
         if (b[ i ] === undefined) {
-          if(allowEmpty && aiIsEmpty) continue
+          if (allowEmpty && aiIsEmpty) continue
           return false
         }
         if (aIsArray && bIsArray && ignoreOrder && !aiIsEmpty && typeof a[ i ] !== 'object' && typeof b[ i ] !== 'object') {
           output = output && b.some(bi => {
-            return smartCompare(a[i], bi, {
+            return smartCompare(a[ i ], bi, {
               allowEmpty, ignoreOrder
             })
           })
-        }else{
+        } else {
           output = output && smartCompare(a[ i ], b[ i ], {
             allowEmpty, ignoreOrder
           })
         }
       }
-      if(allowEmpty && output){
+      if (allowEmpty && output) {
         for (const i in b) {
           if (a[ i ] === undefined && isEmptyVariable(b[ i ])) {
             continue
@@ -186,7 +186,7 @@ function smartCompare(a, b, {
  * @param {Boolean} [options.ignoreEmptyContent=true] if true, it will allow value of keys of a and b to be empty
  * @return {boolean} true if equal
  */
-function compareObject(a, b, map = [], { 
+function compareObject(a, b, map = [], {
   ignoreEmpty = false,
   ignoreType = false,
   ignoreOrder = false,
@@ -211,7 +211,7 @@ function compareObject(a, b, map = [], {
         allowEmpty: ignoreEmptyContent,
         ignoreOrder
       })
-    } else if(!ignoreEmptyContent) {
+    } else if (!ignoreEmptyContent) {
       return false
     }
   }
@@ -233,10 +233,10 @@ function compareObject(a, b, map = [], {
  * @param {Boolean} [options.allowEmptyObject=false] if true, it will return true if `a` is `{}` or `new Object()`
  * @returns 
  */
-function isEmptyVariable(a, { 
+function isEmptyVariable(a, {
   allowZero = true,
   allowEmtyString = false,
-  evenString = false ,
+  evenString = false,
   allowEmptyArray = false,
   allowEmptyObject = false,
 } = {}) {
