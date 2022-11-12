@@ -1,81 +1,189 @@
-function DatabaseSync({ notionToken = '', sheet = {}, data = [], sProps = [], nProps = [], idProp = [], databaseId = '', useDelete = false, useAdd = true, usePull = true, usePush = true, usePullNew = false, fCustomPush = (data, payload, pageId) => { }, fCustomPull = (data, pageId) => { } } = {}) {
-  return new DatabaseSyncClass({ notionToken, sheet, data, sProps, nProps, idProp, databaseId, useDelete, useAdd, usePull, usePush, usePullNew, fCustomPush, fCustomPull })
+/**
+ * Sync data between Sheet and Notion database
+ * @param {Object} options
+ * @param {string} options.notionToken Notion Token
+ * @param {BillSheetClass} [options.sheet] BillSheet
+ * @param {any[]} [options.data=[]] Sheet data. If not provided and `sheet` is provided, will get data from `sheet`
+ * @param {string} options.databaseId Notion database ID
+ * @param {NotionSyncProperty[]} [options.sProps=[]] Sheet properties to sync to Notion. The value of each property in sheet will be synced to the corresponding property in Notion (Sheet -> Notion). Example: [{name: 'Time', type: NOTION_DATA_TYPE.date}]
+ * @param {NotionSyncProperty[]} [options.nProps=[]] Notion properties to sync to Sheet. The value of each property in Notion will be synced to the corresponding property in Sheet (Notion -> Sheet). Example: [{name: 'Time', type: NOTION_DATA_TYPE.date}]
+ * @param {string[]} options.idProp Identifier properties. The value of these properties will be used to identify the row in Notion and Sheet
+ * @param {Boolean} [options.useDelete=false] Pass true to allow to delete pages in Notion if they are not in Sheet
+ * @param {Boolean} [options.useAdd=true] Pass true to allow to add pages to Notion if they are not in Notion
+ * @param {Boolean} [options.usePullNew=false] Pass true to allow to add rows to Sheet if they are not in Sheet
+ * @param {Boolean} [options.usePull=true] Pass true to allow Notion pages to overwrite Sheet rows if they are not the same
+ * @param {Boolean} [options.usePush=true] Pass true to allow Sheet rows to overwrite Notion Pages if they are not the same
+ * @param {NotionSyncCustomPush} [options.fCustomPush] Function will be called before add/push data to Notion. If this function return a valid Object, it will be used as the data to push to Notion. Example: (data, payload, pageId) => {
+    let p = new NotionPropertyMaker().relation('Source', ['abc']);
+    payload.properties = {
+      ...payload.properties,
+      ...p
+    };
+    return { payload };
+  }
+ * @param {NotionSyncCustomPull} [options.fCustomPull] Function will be called after pull/pullNew from Notion and before save to Sheet. If this function return a valid Object, it will be used as the data to save to Sheet.
+ * @param {Boolean} [options.debug=false] Pass true to enable debug mode
+ * @return {DatabaseSyncClass}
+ */
+function DatabaseSync({
+  notionToken = '',
+  sheet = {},
+  data = [],
+  databaseId = '',
+  sProps = [],
+  nProps = [],
+  idProp = [],
+  useDelete = false,
+  useAdd = true,
+  usePull = true,
+  usePush = true,
+  usePullNew = false,
+  fCustomPush,
+  fCustomPull,
+  debug = false
+} = {}) {
+  return new DatabaseSyncClass({
+    notionToken,
+    sheet,
+    data,
+    sProps,
+    nProps,
+    idProp,
+    databaseId,
+    useDelete,
+    useAdd,
+    usePull,
+    usePush,
+    usePullNew,
+    fCustomPush,
+    fCustomPull,
+    debug
+  })
 }
 
+/**
+ * @class
+ */
 class DatabaseSyncClass {
 
   /**
-   * @param{BillSheet} sheet
-   * @param data array - sheet data to sync
-   * @param sProps object - This Properties in Notion will be updated according to this in Sheet. eg. [{name:"Amount", type:"number"}]
-   * @param nProps object - This Properties in Sheet will be updated according to this in Notion. eg. [{name:"Amount", type:"number"}]
-   * @param{array} idProp identify of each item
-   * @param{string} databaseId database id to sync
-   * @param{bool} useDelete Delete Notion page if it doesn't exsit in Sheet
-   * @param{bool} useAdd If a row in sheet doesn't exist in Notion, a new page will be created
-   * @param{bool} usePush If a difference between Sheet and Notion, the data in Notion will be updated according to Sheet
-   * @param{bool} usePull If a difference between Sheet and Notion, the data in the sheet will be updated according to Notion
-   * @param{bool} usePullNew If a page in Notion doesn't exist in Sheet, a new row will be appended
-   * @param{function} fCustomPush
-   * @param{function} fCustomPull
-   */
-  constructor({ notionToken = '', sheet = {}, data = [], sProps = [], nProps = [], idProp = [], databaseId = '', useDelete = false, useAdd = true, usePull = true, usePush = true, usePullNew = false, fCustomPush = (data, payload, pageId) => { }, fCustomPull = (data, pageId) => { } } = {}) {
+   * @param {Object} options
+   * @param {string} options.notionToken Notion Token
+   * @param {BillSheetClass} [options.sheet] BillSheet
+   * @param {any[]} [options.data=[]] Sheet data. If not provided and `sheet` is provided, will get data from `sheet`
+   * @param {string} options.databaseId Notion database ID
+   * @param {NotionSyncProperty|NotionSyncProperty[]} [options.sProps=[]] Sheet properties to sync to Notion. The value of each property in sheet will be synced to the corresponding property in Notion (Sheet -> Notion). Example: [{name: 'Time', type: NOTION_DATA_TYPE.date}]
+   * @param {NotionSyncProperty|NotionSyncProperty[]} [options.nProps=[]] Notion properties to sync to Sheet. The value of each property in Notion will be synced to the corresponding property in Sheet (Notion -> Sheet). Example: [{name: 'Time', type: NOTION_DATA_TYPE.date}]
+   * @param {string|string[]} options.idProp Identifier properties. The value of these properties will be used to identify the row in Notion and Sheet
+   * @param {Boolean} [options.useDelete=false] Pass true to allow to delete pages in Notion if they are not in Sheet
+   * @param {Boolean} [options.useAdd=true] Pass true to allow to add pages to Notion if they are not in Notion
+   * @param {Boolean} [options.usePullNew=false] Pass true to allow to add rows to Sheet if they are not in Sheet
+   * @param {Boolean} [options.usePull=true] Pass true to allow Notion pages to overwrite Sheet rows if they are not the same
+   * @param {Boolean} [options.usePush=true] Pass true to allow Sheet rows to overwrite Notion Pages if they are not the same
+   * @param {NotionSyncCustomPush} [options.fCustomPush] Function will be called before add/push data to Notion. If this function return a valid Object, it will be used as the data to push to Notion. Example: (data, payload, pageId) => {
+      let p = new NotionPropertyMaker().relation('Source', ['abc']);
+      payload.properties = {
+        ...payload.properties,
+        ...p
+      };
+      return { payload };
+    }
+  * @param {NotionSyncCustomPull} [options.fCustomPull] Function will be called after pull/pullNew from Notion and before save to Sheet. If this function return a valid Object, it will be used as the data to save to Sheet.
+  * @param {Boolean} [options.debug=false] Pass true to enable debug mode
+  */
+  constructor({
+    notionToken = '',
+    sheet = {},
+    data = [],
+    databaseId = '',
+    sProps = [],
+    nProps = [],
+    idProp = [],
+    useDelete = false,
+    useAdd = true,
+    usePull = true,
+    usePush = true,
+    usePullNew = false,
+    fCustomPush,
+    fCustomPull,
+    debug = false
+  } = {}) {
+    this.notionToken = notionToken || ''
+    this.databaseId = databaseId || ''
+    this.sheet = null
+    this.data = data
+    this.sProps = sProps
+    this.nProps = nProps
+    this.idProp = idProp
+    this.useDelete = useDelete
+    this.useAdd = useAdd
+    this.usePull = usePull
+    this.usePush = usePush
+    this.usePullNew = usePullNew
+    this.debug = debug
+    this.fCustomPush = null
+    this.fCustomPull = null
+
     if (sheet && sheet._sheet)
       this.sheet = sheet
-    if (isValidArray(data)) {
-      this.data = data
-    } else if (isValidObject(data)) {
-      this.data = [ data ]
-    } else {
+    if (!isValidArray(this.data)) {
+      if (isValidObject(this.data)) {
+        this.data = [ this.data ]
+      } else if (this.sheet && this.sheet.toJSON) {
+        this.data = this.sheet.toJSON()
+      }
+    }
+    if (!isValidArray(this.data)) {
       this.data = []
     }
-    if (isValidArray(sProps)) {
-      this.sProps = sProps
+    if (isValidObject(this.sProps)) {
+      this.sProps = [ this.sProps ]
     }
-    if (isValidArray(nProps)) {
-      this.nProps = nProps
+    if (!isValidArray(this.sProps)) {
+      this.sProps = []
     }
-    if (isValidArray(idProp)) {
-      this.idProp = idProp
-    } else {
+    if (isValidObject(this.nProps)) {
+      this.nProps = [ this.nProps ]
+    }
+    if (!isValidArray(this.nProps)) {
+      this.nProps = []
+    }
+    if (!isValidArray(idProp) && !isEmptyVariable(idProp)) {
+      this.idProp = [ idProp ]
+    }
+    if (!isValidArray(this.idProp)) {
       this.idProp = []
     }
-    if (databaseId) {
-      this.databaseId = databaseId
-    }
-    if (!isEmptyVariable(useDelete))
-      this.useDelete = useDelete
-    else
-      this.useDelete = false
-    if (!isEmptyVariable(useAdd))
-      this.useAdd = useAdd
-    else
-      this.useAdd = true
-    if (!isEmptyVariable(usePush))
-      this.usePush = usePush
-    else
-      this.usePush = true
-    if (!isEmptyVariable(usePull))
-      this.usePull = usePull
-    else
-      this.usePull = true
-    if (!isEmptyVariable(usePullNew))
-      this.usePullNew = usePullNew
-    else
-      this.usePullNew = false
-    if (fCustomPush)
+    if (fCustomPush && typeof fCustomPush === 'function') {
       this.fCustomPush = fCustomPush
-    if (fCustomPull)
+    }
+    if (fCustomPull && typeof fCustomPull === 'function') {
       this.fCustomPull = fCustomPull
-    this.notionToken = notionToken || ''
+    }
   }
 
   /**
-   * Compare sheet data with database data-
-   * @param{array} a
-   * @param{array} b
-   * @param{array} idProp identify of each item
-   * @return array
+   * Debug log
+   * @param {string} type console type
+   * @param  {...any} content 
+   * @return {void}
+   */
+  dbg(type, ...content) {
+    if (this.debug) {
+      if (console[ type ]) {
+        console[ type ](...content)
+      }
+    }
+  }
+
+  /**
+   * Compare Sheet data with Notion data
+   * @param {{}[]} sheet Sheet data
+   * @param {{}[]} notion Notion data
+   * @param {string[]} idProp identify of each item
+   * @param {NotionSyncProperty[]} sProps Sheet properties
+   * @param {NotionSyncProperty[]} nProps Notion properties
+   * @return {{type: string, sheet: number, notion: number}[]} Changes
    */
   compare(sheet = [], notion = [], idProp = [], sProps = [], nProps = []) {
     let result = []
@@ -86,14 +194,19 @@ class DatabaseSyncClass {
         let macthId = 0
         let subRes = {}
 
+        // Find item in Sheet by idProp
         for (const idp of idProp) {
-          if (!smartCompare(sheet[ i ][ idp ], null)) {
+          if (!isEmptyVariable(sheet[ i ][ idp ])) {
             macthId++
           }
         }
+
+        // If not match, skip to next step
         if (macthId != idProp.length) {
           continue
         }
+
+        // If match, find item in Notion and compare
         for (const j in notion) {
           let match = 0
           for (const idp of idProp) {
@@ -101,42 +214,51 @@ class DatabaseSyncClass {
               match++
             }
           }
-
           if (match == idProp.length) {
             readList.push(j)
             let anyPushChange = false
             let anyPullChange = false
 
-            for (const k in sProps) {
-              const spk = sProps[ k ][ 'name' ]
-              if (!smartCompare(sheet[ i ][ spk ], null)) {
-                if (!smartCompare(notion[ j ][ spk ], null)) {
-                  if (!smartCompare(sheet[ i ][ spk ], notion[ j ][ spk ])) {
-                    anyPushChange = true
-                    break
-                  }
-                } else {
-                  anyPushChange = true
-                  break
-                }
+            if (sProps && sProps.length) {
+              const sPropsMap = sProps.map(p => p.name)
+              if (!compareObject(sheet[ i ], notion[ j ], sPropsMap)) {
+                anyPushChange = true
               }
+              // for (const k in sProps) {
+              //   const spk = sProps[ k ][ 'name' ]
+              //   if (!isEmptyVariable(sheet[ i ][ spk ])) {
+              //     if (!isEmptyVariable(notion[ j ][ spk ])) {
+              //       if (!smartCompare(sheet[ i ][ spk ], notion[ j ][ spk ])) {
+              //         anyPushChange = true
+              //         break
+              //       }
+              //     } else {
+              //       anyPushChange = true
+              //       break
+              //     }
+              //   }
+              // }
             }
 
             if (nProps && nProps.length) {
-              for (const k in nProps) {
-                const npk = nProps[ k ][ 'name' ]
-                if (!smartCompare(notion[ j ][ npk ], null)) {
-                  if (!smartCompare(sheet[ i ][ npk ], null)) {
-                    if (!smartCompare(sheet[ i ][ npk ], notion[ j ][ npk ])) {
-                      anyPullChange = true
-                      break
-                    }
-                  } else {
-                    anyPullChange = true
-                    break
-                  }
-                }
+              const nPropsMap = nProps.map(p => p.name)
+              if (!compareObject(sheet[ i ], notion[ j ], nPropsMap)) {
+                anyPullChange = true
               }
+              // for (const k in nProps) {
+              //   const npk = nProps[ k ][ 'name' ]
+              //   if (!smartCompare(notion[ j ][ npk ], null)) {
+              //     if (!smartCompare(sheet[ i ][ npk ], null)) {
+              //       if (!smartCompare(sheet[ i ][ npk ], notion[ j ][ npk ])) {
+              //         anyPullChange = true
+              //         break
+              //       }
+              //     } else {
+              //       anyPullChange = true
+              //       break
+              //     }
+              //   }
+              // }
             }
 
             if (anyPullChange) {
@@ -163,7 +285,9 @@ class DatabaseSyncClass {
           }
         }
 
-        // If Sheet has and Notion doens't -> ADD or DELETE_IN_SHEET
+        // If Sheet has and Notion doens't: 2 options to execute
+        // 1. Add to Notion (ADD). If useAdd option is true, execute
+        // 2. Delete that row (DELETE_IN_SHEET).
         if (!subRes.type) {
           subRes = {
             type: 'ADD',
@@ -174,7 +298,7 @@ class DatabaseSyncClass {
         result.push(subRes)
       }
 
-      // If sheet empty -> pull all from Notion
+      // If sheet empty, pullNew all from Notion
       if (sheet.length == 0) {
         for (const i in notion) {
           result.push({
@@ -183,10 +307,11 @@ class DatabaseSyncClass {
           })
         }
       }
+
       // Delete or pull Notion page
-      // If a page in Notion database doesn't exist in sheet: 2 options to execute
-      // - useDelete == true -> delete this page
-      // - usePullNew == true -> create new row in sheet
+      // If a page in Notion doesn't exist in sheet: 2 options to execute
+      // 1. Delete this page in Notion. If useDelete option is true, execute
+      // 2. Create new row in sheet. If usePullNew option is true, execute
       else {
         for (const i in notion) {
           if (!readList.includes(i)) {
@@ -206,61 +331,79 @@ class DatabaseSyncClass {
     return result
   }
 
+  /**
+   * Sync Sheet data with Notion data
+   * @returns {{}[]} Notion database data
+   */
   sync() {
-    const { data, sProps, nProps, databaseId, idProp, useDelete, useAdd, usePush, usePull, usePullNew } = this
-    if (data && (isValidArray(sProps) || isValidArray(nProps)) && isValidArray(idProp) && databaseId) {
-      let databaseData = new NotionDatabase({ databaseId: databaseId, token: this.notionToken }).load()
+    const { notionToken, data, sProps, nProps, databaseId, idProp, useDelete, useAdd, usePush, usePull, usePullNew } = this
+    if (data && (sProps || nProps) && idProp && databaseId) {
+      this.dbg('warn', 'Getting data from Notion...')
+      let databaseData = new NotionDatabase({
+        databaseId,
+        token: notionToken
+      }).load()
       if (isValidArray(databaseData)) {
+        // prepare data to compare
         let sheetData = data
         let notionData = databaseData.map(d => {
           let jd = d.getPropertiesJSON() // new NotionPage({pageId: d.getId()}).getPropertiesJSON()
           let rd = { page_info: { page_id: d.getId() } }
+          // remove unnecessary properties, only keep sProps and nProps
           for (const i in jd) {
-            if (sProps && sProps.filter(p => p.name == i).length)
+            if (sProps && sProps.find(p => p.name == i)) {
               rd[ i ] = jd[ i ]
-            if (nProps && nProps.filter(p => p.name == i).length)
+            }
+            if (nProps && nProps.find(p => p.name == i)) {
               rd[ i ] = jd[ i ]
+            }
           }
           return rd
         })
         this.compare(sheetData, notionData, idProp, sProps, nProps).forEach(diff => {
           if (diff.type == 'ADD' && useAdd) {
-            console.log('ADD => ', sheetData[ diff.sheet ])
+            console.info('ADD => ', sheetData[ diff.sheet ])
             this.createDatabaseItems(sheetData[ diff.sheet ], databaseId)
           } else if (diff.type == 'DELETE' && useDelete) {
-            console.log('DELETE => ', notionData[ diff.notion ].page_info.page_id)
+            console.info('DELETE => ', notionData[ diff.notion ].page_info.page_id)
             this.deleteDatabaseItems(notionData[ diff.notion ].page_info.page_id)
           } else if (diff.type == 'PUSH' && usePush) {
-            console.log('PUSH => ', sheetData[ diff.sheet ])
+            console.info('PUSH => ', sheetData[ diff.sheet ])
+            console.info('===>', notionData[ diff.notion ])
             this.updateDatabaseItems(sheetData[ diff.sheet ], notionData[ diff.notion ].page_info.page_id)
           } else if (diff.type == 'PULL' && usePull) {
-            console.log('PULL => ', notionData[ diff.notion ])
+            console.info('PULL => ', notionData[ diff.notion ])
             this.pullDataToSheet(notionData[ diff.notion ])
           } else if (diff.type == 'PULL_NEW' && usePullNew) {
-            console.log('PULL_NEW => ', notionData[ diff.notion ])
+            console.info('PULL_NEW => ', notionData[ diff.notion ])
             this.pullDataToSheet(notionData[ diff.notion ])
           } else {
-            console.log(
-              'Not Exec =>',
-              {
-                type: diff.type,
-                sheet: sheetData[ diff.sheet ] || null,
-                notion: notionData[ diff.notion ] || null
-              }
-            )
+            this.dbg('log', 'Not Exec =>', {
+              type: diff.type,
+              sheet: sheetData[ diff.sheet ] || null,
+              notion: notionData[ diff.notion ] || null
+            })
           }
         });
         // if (this.databaseId == DATABASE_ID.TRANSACTIONS) {
         //   RelatedTransactions(notionData)
         // }
 
+        this.dbg('warn', 'Synced successfully!')
         return notionData
       }
     }
 
+    this.dbg('warn', 'Invalid data to sync')
     return []
   }
 
+  /**
+   * Update Notion page(s)
+   * @param {{}|{}[]} data data to update
+   * @param {string} pageId Notion page id
+   * @return {boolean} true if success
+   */
   updateDatabaseItems(data = {}, pageId = '') {
     if (data) {
       let { sProps } = this
@@ -282,8 +425,18 @@ class DatabaseSyncClass {
         }
         new NotionAPI({ token: this.notionToken }).updatePage(pageId, payload)
       }
+      return true
     }
+    console.error('Can not update Notion page without page id')
+    return false
   }
+
+  /**
+   * Create Notion page(s)
+   * @param {{}|{}[]} data data of new page(s)
+   * @param {string} databaseId Notion database id
+   * @return {boolean} true if success
+   */
   createDatabaseItems(data = {}, databaseId = '') {
     if (databaseId && isValidObject(data)) {
       let { sProps, nProps } = this
@@ -318,26 +471,68 @@ class DatabaseSyncClass {
           ...payload
         })
       }
+      return true
     }
+    console.error('Can not create a Notion page without database id')
+    return false
   }
+
+  /**
+   * Delete Notion page(s)
+   * @param {string} pageId Notion page id to delete
+   * @return {boolean} true if success
+   */
   deleteDatabaseItems(pageId = '') {
-    if (pageId)
+    if (pageId) {
       new NotionAPI({ token: this.notionToken }).deletePage(pageId)
+      return true
+    }
+    console.error('Can not delete Notion page without page id')
+    return false
   }
+
+  /**
+   * Get data from Notion page and save to Sheet
+   * @param {string|{}} data Notion page id or Notion page data
+   * @return {boolean} true if success
+   */
   pullDataToSheet(data = {}) {
     if (data) {
       const pageId = data.page_info.page_id
       if (this.fCustomPull) {
-        data = this.fCustomPull(data, pageId) || data
+        try {
+          data = this.fCustomPull(data, pageId) || data
+        } catch (e) { console.error('Error at [fCustomPull]', e) }
       }
       if (this.sheet && isValidArray(this.idProp)) {
-        let query = {}
-        for (const idp of this.idProp) {
-          query[ idp ] = data[ idp ]
-        }
-        this.sheet.updateRow(query, data)
+        return this.sheet.update(data, this.idProp)
       }
     }
+    return false
   }
 
 }
+
+
+
+/**
+ * @typedef {Object} NotionSyncProperty
+ * @property {string} name Property name
+ * @property {NOTION_DATA_TYPE} type Property type
+ */
+
+/**
+ * @callback NotionSyncCustomPush
+ * @param {Object} data Data to push/add {<property_name>: <property_value>}
+ * @param {Object} payload Request payload
+ * @param {string} pageId Notion page id (push) or database id (add)
+ * @returns {{pageId: string, payload: {properties: NotionPropertyMaker.getJSON}}}
+ */
+
+
+/**
+ * @callback NotionSyncCustomPull
+ * @param {Object} data Data from Notion after pull/pullNew {<property_name>: <property_value>}
+ * @param {string} pageId Notion page id
+ * @returns {Object} rowData to save to Sheet
+ */
