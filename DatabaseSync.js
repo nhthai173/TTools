@@ -336,6 +336,10 @@ class DatabaseSyncClass {
    * @returns {{}[]} Notion database data
    */
   sync() {
+    // contains compare result
+    const compareResult = {
+      diffCnt: 0, notExcCnt: 0
+    }
     const { notionToken, data, sProps, nProps, databaseId, idProp, useDelete, useAdd, usePush, usePull, usePullNew } = this
     if (data && (sProps || nProps) && idProp && databaseId) {
       this.dbg('warn', 'Getting data from Notion...')
@@ -361,6 +365,7 @@ class DatabaseSyncClass {
           return rd
         })
         this.compare(sheetData, notionData, idProp, sProps, nProps).forEach(diff => {
+          compareResult.diffCnt += 1
           if (diff.type == 'ADD' && useAdd) {
             console.info('ADD => ', sheetData[ diff.sheet ])
             this.createDatabaseItems(sheetData[ diff.sheet ], databaseId)
@@ -378,6 +383,7 @@ class DatabaseSyncClass {
             console.info('PULL_NEW => ', notionData[ diff.notion ])
             this.pullDataToSheet(notionData[ diff.notion ])
           } else {
+            compareResult.notExcCnt += 1
             this.dbg('log', 'Not Exec =>', {
               type: diff.type,
               sheet: sheetData[ diff.sheet ] || null,
@@ -389,7 +395,9 @@ class DatabaseSyncClass {
         //   RelatedTransactions(notionData)
         // }
 
-        this.dbg('warn', 'Synced successfully!')
+        if (compareResult.diffCnt === compareResult.notExcCnt) {
+          console.log('Synced successfully without any updates!')
+        }
         return notionData
       }
     }
