@@ -54,132 +54,188 @@ function NOTION() {
 
 
 
-
+/**
+ * @class
+ * Notion API requests
+ */
 class NotionAPI {
-  constructor({ token = '' } = {}) {
-    this.token = token || ''
-    if (this.token) {
-      this.headers = {
-        'Authorization': `Bearer ${this.token}`,
-        'Notion-Version': '2022-02-22',
-        'Content-Type': 'application/json'
-      }
-    } else {
-      this.headers = {}
-    }
-  }
 
   /**
    * 
+   * @param {Object} options
+   * @param {string} options.token Notion private token
+   */
+  constructor({ token = '' } = {}) {
+    this.token = token || ''
+    this.headers = {}
+  }
+
+  /**
+   * Generate request header
+   * @return {null|{}} header
+   */
+  _generateHeader() {
+    if (!this.token) {
+      console.error('[NotionAPI] Missing token')
+      return null
+    }
+    this.headers = {
+      'Authorization': `Bearer ${this.token}`,
+      'Notion-Version': '2022-02-22',
+      'Content-Type': 'application/json'
+    }
+    return this.headers
+  }
+
+  /**
+   * Get Notion database data by database id
+   * @param {string} id Database id
+   * @param {{}} payload request payload
+   * @return {{results: {}[]}}
    */
   getDatabaseById(id = '', payload = {}) {
-    var out = {}
-    if (id) {
-      const res = UrlFetchApp.fetch(`https://api.notion.com/v1/databases/${id}/query`, {
-        muteHttpExceptions: true,
-        method: 'post',
-        headers: this.headers || {},
-        payload: JSON.stringify(payload)
-      })
-      if (res.getResponseCode() == '200') {
-        out = JSON.parse(res.getContentText())
-        if (out.next_cursor) {
-          var np = this.getDatabaseById(id, {
-            start_cursor: out.next_cursor
-          })
-          if (np.results) {
-            out.results = [
-              ...out.results,
-              ...np.results
-            ]
-          }
-        }
-      } else {
-        console.error({
-          url: `https://api.notion.com/v1/databases/${id}/query`,
-          method: 'post',
-          token: this.token,
-          headers: this.headers,
-          message: res.getContentText()
-        })
-      }
+    let out = {}
+    const headers = this._generateHeader()
+    if (!headers) return out
+    if (!id) {
+      console.error('Can not get database data without id')
+      return out
     }
+
+    const res = UrlFetchApp.fetch(`https://api.notion.com/v1/databases/${id}/query`, {
+      muteHttpExceptions: true,
+      method: 'post',
+      headers: headers,
+      payload: JSON.stringify(payload)
+    })
+    if (res.getResponseCode() == '200') {
+      out = JSON.parse(res.getContentText())
+      if (out.next_cursor) {
+        let np = this.getDatabaseById(id, {
+          start_cursor: out.next_cursor
+        })
+        if (np.results) {
+          out.results = [
+            ...out.results,
+            ...np.results
+          ]
+        }
+      }
+    } else {
+      console.error({
+        url: `https://api.notion.com/v1/databases/${id}/query`,
+        method: 'post',
+        token: this.token,
+        headers: this.headers,
+        message: res.getContentText()
+      })
+    }
+
     return out
   }
 
   /**
-   * 
+   * Create a Notion page
+   * @param {{}} payload request payload
+   * @param {string} databaseParent Database parent id
+   * @return {{}}
    */
   createPage(payload = {}, databaseParent = '') {
-    if (payload) {
-      if (databaseParent) {
-        payload = {
-          "parent": { "database_id": databaseParent },
-          ...payload
-        }
-      }
-      const res = UrlFetchApp.fetch(`https://api.notion.com/v1/pages`, {
-        muteHttpExceptions: true,
-        method: 'post',
-        headers: this.headers || {},
-        payload: JSON.stringify(payload)
-      })
-      if (res.getResponseCode() == 200) {
-        return JSON.parse(res.getContentText())
-      } else {
-        console.error({
-          url: `https://api.notion.com/v1/pages`,
-          method: 'post',
-          token: this.token,
-          headers: this.headers,
-          message: res.getContentText()
-        })
+    let output = {}
+    const headers = this._generateHeader()
+    if (!headers) return output
+    if (!payload) {
+      console.error('Can not create page without payload')
+      return output
+    }
+
+    if (databaseParent) {
+      payload = {
+        "parent": { "database_id": databaseParent },
+        ...payload
       }
     }
-    return {}
+    const res = UrlFetchApp.fetch(`https://api.notion.com/v1/pages`, {
+      muteHttpExceptions: true,
+      method: 'post',
+      headers: headers,
+      payload: JSON.stringify(payload)
+    })
+    if (res.getResponseCode() == 200) {
+      return JSON.parse(res.getContentText())
+    } else {
+      console.error({
+        url: `https://api.notion.com/v1/pages`,
+        method: 'post',
+        token: this.token,
+        headers: this.headers,
+        message: res.getContentText()
+      })
+    }
+
+    return output
   }
 
   /**
-   * 
+   * Update a Notion page
+   * @param {string} pageId Page id
+   * @param {{}} payload request payload
+   * @return {{}}
    */
   updatePage(pageId = '', payload = {}) {
-    if (pageId && payload) {
-      const res = UrlFetchApp.fetch('https://api.notion.com/v1/pages/' + pageId, {
-        muteHttpExceptions: true,
-        method: 'patch',
-        headers: this.headers || {},
-        payload: JSON.stringify(payload)
-      })
-      if (res.getResponseCode() == '200') {
-        return JSON.parse(res.getContentText())
-      } else {
-        console.error({
-          url: 'https://api.notion.com/v1/pages/' + pageId,
-          method: 'patch',
-          token: this.token,
-          headers: this.headers,
-          message: res.getContentText()
-        })
-      }
+    let output = {}
+    const headers = this._generateHeader()
+    if (!headers) return output
+    if (!pageId) {
+      console.error('Can not update page without page id')
+      return output
     }
-    return {}
+
+    const res = UrlFetchApp.fetch('https://api.notion.com/v1/pages/' + pageId, {
+      muteHttpExceptions: true,
+      method: 'patch',
+      headers: this.headers || {},
+      payload: JSON.stringify(payload)
+    })
+    if (res.getResponseCode() == '200') {
+      return JSON.parse(res.getContentText())
+    } else {
+      console.error({
+        url: 'https://api.notion.com/v1/pages/' + pageId,
+        method: 'patch',
+        token: this.token,
+        headers: this.headers,
+        message: res.getContentText()
+      })
+    }
+
+    return output
   }
 
   /**
-   * 
+   * Get Notion page data by page id
+   * @param {string} pageId Page id
+   * @return {{}}
    */
   getPageById(pageId = '') {
+    if (!pageId) {
+      console.error('Can not get page data without page id')
+      return {}
+    }
     return this.updatePage(pageId)
   }
 
   /**
-   * 
+   * Delete a Notion page by page id
+   * @param {string} pageId Page id
+   * @return {{}}
    */
   deletePage(pageId = '') {
-    if (pageId) {
-      return this.updatePage(pageId, { "archived": true })
+    if (!pageId) {
+      console.error('Can not delete page without page id')
+      return {}
     }
-    return {}
+    return this.updatePage(pageId, { "archived": true })
   }
 }
 
