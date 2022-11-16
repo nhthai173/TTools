@@ -57,8 +57,8 @@ class BillSheetClass {
     * @param {{}} options.path Pairs of key and column index
     * @param {string} [options.sortProp] Name of property to sort
     * @param {string} [options.sortType] sortProp type, "number" | "string"
-    * @param {string[]} [options.emptyPropList] List of property name. If these properties of row are empty, the row will be removed
-    * @param {string[]} [options.uniquePropList] List of property name. If there is more than one row with the same value of these properties, only the first row is kept, the rest will be removed.
+    * @param {string|string[]} [options.emptyPropList] List of property name. If these properties of row are empty, the row will be removed
+    * @param {string|string[]} [options.uniquePropList] List of property name. If there is more than one row with the same value of these properties, only the first row is kept, the rest will be removed.
     * @param {{}} [options.transform] A table containing functions whose input is the value of property of the same name and the output is saved to sheet. These functions will be executed before the data is saved to the sheet and before the beforeAppend function is executed.
     * @param {beforeAppendCB} [options.beforeAppend] A function that is called with the data of each row (as Object), before appending data to sheet.
     * @param {afterGetCB} [options.afterGet] A function that is called with the data of each row (as Object), after getting data from sheet. 
@@ -83,15 +83,27 @@ class BillSheetClass {
      */
     const D_SHEET_ID = '13P0_OQ_-AjOM2q2zNKsgCAzWuOkNRYw8Z9LV8m8qXcc'
 
-    this.sheetId = sheetId || D_SHEET_ID
+    this.sheetId = sheetId || ''
     this.sheetName = sheetName || ''
     this.path = path || {}
     this.sortProp = sortProp || ''
     this.sortType = sortType || ''
-    this.emptyPropList = emptyPropList || []
-    this.uniquePropList = uniquePropList || []
-
+    this.emptyPropList = emptyPropList
+    this.uniquePropList = uniquePropList
     this.transform = {}
+
+    if (!this.sheetId) {
+      console.warn('sheetId is empty, using default sheet id: D_SHEET_ID\nThis is deprecated, please specify sheetId in the future.')
+      this.sheetId = D_SHEET_ID
+    }
+
+    if (!isValidArray(this.emptyPropList) && !isEmptyVariable(emptyPropList)) {
+      this.emptyPropList = [ emptyPropList ]
+    }
+    if (!isValidArray(uniquePropList) && !isEmptyVariable(uniquePropList)) {
+      this.uniquePropList = [ uniquePropList ]
+    }
+
     if (isValidObject(transform)) {
       for (let prop in transform) {
         if (typeof transform[ prop ] === 'function') {
@@ -552,6 +564,72 @@ class BillSheetClass {
     }
 
     return false
+  }
+
+
+
+
+  /**
+   * Sync data between Sheet and Notion
+   * 
+   * @param {Object} options
+   * @param {string} options.notionToken Notion private token
+   * @param {string} options.notionDatabaseId Notion database id
+   * @param {NotionSyncProperty[]} [options.sProps=[]] Sheet properties to sync to Notion. The value of each property in sheet will be synced to the corresponding property in Notion (Sheet -> Notion). Example: [{name: 'Time', type: NOTION_DATA_TYPE.date}]
+   * @param {NotionSyncProperty[]} [options.nProps=[]] Notion properties to sync to Sheet. The value of each property in Notion will be synced to the corresponding property in Sheet (Notion -> Sheet). Example: [{name: 'Time', type: NOTION_DATA_TYPE.date}]
+   * @param {string|string[]} [options.idProp] Identifier properties. The value of these properties will be used to identify the row in Notion and Sheet. Default is `uniquePropList`
+   * @param {Boolean} [options.useDelete=false] Pass true to allow to delete pages in Notion if they are not in Sheet
+   * @param {Boolean} [options.useAdd=true] Pass true to allow to add pages to Notion if they are not in Notion
+   * @param {Boolean} [options.usePullNew=false] Pass true to allow to add rows to Sheet if they are not in Sheet
+   * @param {Boolean} [options.usePull=true] Pass true to allow Notion pages to overwrite Sheet rows if they are not the same
+   * @param {Boolean} [options.usePush=true] Pass true to allow Sheet rows to overwrite Notion Pages if they are not the same
+   * @param {NotionSyncCustomPush} [options.fCustomPush] Function will be called before add/push data to Notion. If this function return a valid Object, it will be used as the data to push to Notion. Example: (data, payload, pageId) => {
+    let p = new NotionPropertyMaker().relation('Source', ['abc']);
+    payload.properties = {
+      ...payload.properties,
+      ...p
+    };
+    return { payload };
+  }
+   * @param {NotionSyncCustomPull} [options.fCustomPull] Function will be called after pull/pullNew from Notion and before save to Sheet. If this function return a valid Object, it will be used as the data to save to Sheet.
+   * 
+   * @returns {{}[]} Notion database data
+   */
+  syncNotion({
+    notionToken = '',
+    databaseId = '',
+    sProps = [],
+    nProps = [],
+    idProp = [],
+    useDelete = false,
+    useAdd = true,
+    usePull = true,
+    usePush = true,
+    usePullNew = false,
+    fCustomPush,
+    fCustomPull,
+  } = {}) {
+    const sheet = this
+    if (!isValidArray(idProp) && !idProp) {
+      idProp = this.uniquePropList
+    }
+
+    return new DatabaseSyncClass({
+      sheet,
+      data: sheet.toJSON(),
+      notionToken,
+      databaseId,
+      sProps,
+      nProps,
+      idProp,
+      useDelete,
+      useAdd,
+      usePull,
+      usePush,
+      usePullNew,
+      fCustomPush,
+      fCustomPull
+    }).sync()
   }
 
 
