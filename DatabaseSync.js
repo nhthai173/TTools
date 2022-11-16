@@ -7,7 +7,7 @@
  * @param {string} options.databaseId Notion database ID
  * @param {NotionSyncProperty[]} [options.sProps=[]] Sheet properties to sync to Notion. The value of each property in sheet will be synced to the corresponding property in Notion (Sheet -> Notion). Example: [{name: 'Time', type: NOTION_DATA_TYPE.date}]
  * @param {NotionSyncProperty[]} [options.nProps=[]] Notion properties to sync to Sheet. The value of each property in Notion will be synced to the corresponding property in Sheet (Notion -> Sheet). Example: [{name: 'Time', type: NOTION_DATA_TYPE.date}]
- * @param {string[]} options.idProp Identifier properties. The value of these properties will be used to identify the row in Notion and Sheet
+ * @param {string|string[]} options.idProp Identifier properties. The value of these properties will be used to identify the row in Notion and Sheet
  * @param {Boolean} [options.useDelete=false] Pass true to allow to delete pages in Notion if they are not in Sheet
  * @param {Boolean} [options.useAdd=true] Pass true to allow to add pages to Notion if they are not in Notion
  * @param {Boolean} [options.usePullNew=false] Pass true to allow to add rows to Sheet if they are not in Sheet
