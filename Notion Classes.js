@@ -13,7 +13,7 @@
  * @property {string} phone_number Phone number
  * @property {string} date Date
  */
-const NOTION_DATA_TYPE = {
+var NOTION_DATA_TYPE = {
   title: 'title',
   rich_text: 'rich_text',
   number: 'number',
