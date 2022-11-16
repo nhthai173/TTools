@@ -186,6 +186,10 @@ class DatabaseSyncClass {
    * @return {{type: string, sheet: number, notion: number}[]} Changes
    */
   compare(sheet = [], notion = [], idProp = [], sProps = [], nProps = []) {
+    if(!isValidArray(idProp)){
+      console.error('idProp can not empty')
+      return []
+    }
     let result = []
     let readList = []
     if (sheet && notion) {
@@ -194,19 +198,19 @@ class DatabaseSyncClass {
         let macthId = 0
         let subRes = {}
 
-        // Find item in Sheet by idProp
+        // Check unempty item in Sheet by idProp
         for (const idp of idProp) {
           if (!isEmptyVariable(sheet[ i ][ idp ])) {
             macthId++
           }
         }
 
-        // If not match, skip to next step
+        // If not valid item, skip to next item
         if (macthId != idProp.length) {
           continue
         }
 
-        // If match, find item in Notion and compare
+        // If valid, find item in Notion and compare
         for (const j in notion) {
           let match = 0
           for (const idp of idProp) {

@@ -23,9 +23,9 @@ const TEST = {}
 /**
  * Missing input BillSheet.
  */
-TEST.BillSheet__error = BillSheet()
+// TEST.BillSheet__error = BillSheet()
 
-
+/*
 TEST.BillSheet = BillSheet({
   sheetId: '1nCzYIC3MmL76allpjwO34spk5YJQp9v78kqx7IXnTj8',
   sheetName: 'event_in_year',
@@ -39,3 +39,4 @@ TEST.BillSheet = BillSheet({
     'image_url': 6
   }
 })
+*/

@@ -610,10 +610,9 @@ class BillSheetClass {
     fCustomPull,
   } = {}) {
     const sheet = this
-    if (!isValidArray(idProp) && !idProp) {
+    if (typeof idProp === 'object' && !isValidArray(idProp)) {
       idProp = this.uniquePropList
     }
-
     return new DatabaseSyncClass({
       sheet,
       data: sheet.toJSON(),
