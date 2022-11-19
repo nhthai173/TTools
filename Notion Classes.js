@@ -28,6 +28,11 @@ var NOTION_DATA_TYPE = {
   date: 'date'
 }
 
+var NOTION_FILE_TYPE = {
+  external: "external",
+  emoji: "emoji"
+}
+
 var NOTION_OPTION_COLORS = {
   default: "default",
   gray: "gray",
@@ -65,6 +70,41 @@ function NOTION() {
   }
 }
 
+
+/**
+ * Create icon Object
+ * @param {"external"|"emoji"} type Icon type
+ * @param {string} value file url or emoji
+ * @return {{icon: {}}}
+ */
+function NotionPageIconMaker(type = '', value) {
+  if (isEmptyVariable(value)) return null
+  const out = {icon: {}}
+  const prop = new NotionPropertyMaker()
+  if(type === NOTION_FILE_TYPE.emoji) {
+    out.icon = prop.emoji(value)
+  } else if (type === NOTION_FILE_TYPE.external) {
+    out.icon = prop.externalFile(value)
+  }
+  return out
+}
+
+
+/**
+ * Create cover Object
+ * @param {"external"} type cover type
+ * @param {string} value file url
+ * @return {{cover: {}}}
+ */
+function NotionPageCoverMaker(type = '', value) {
+  if (isEmptyVariable(value)) return null
+  const out = { cover: {} }
+  const prop = new NotionPropertyMaker()
+  if (type === NOTION_FILE_TYPE.external) {
+    out.cover = prop.externalFile(value)
+  }
+  return out
+}
 
 
 /**
@@ -192,7 +232,7 @@ class NotionAPI {
   /**
    * Update a Notion page
    * @param {string} pageId Page id
-   * @param {{}} payload request payload
+   * @param {{properties: {}, archived: Boolean, icon: {}, cover: {}}} payload request payload
    * @return {{}}
    */
   updatePage(pageId = '', payload = {}) {
@@ -262,6 +302,50 @@ class NotionPropertyMaker {
 
   constructor() {
     this.data = { "properties": {} }
+  }
+
+  /**
+   * Create external File Object
+   * @param {string} url image url
+   * @param {"icon"|"cover"} type If provided, will be added to export data when call getJSON. Possible values: "icon", "cover".
+   * @return {{type: "external", external: {url: string}}|{}}
+   */
+  externalFile(url, type) {
+    let out = {}
+    let p = {}
+    if (!isEmptyVariable(url)) {
+      p.type = 'external'
+      p.external = { url }
+    }
+    if (type === 'icon' || type === 'cover') {
+      out[ type ] = p
+      if (!this.data[ type ]) this.data[ type ] = {}
+      this.data[ type ] = p
+      return out
+    }
+    return p
+  }
+
+  /**
+   * Create external File Object
+   * @param {string} value emoji
+   * @param {"icon"} type If provided, will be added to export data when call getJSON. Possible values: "icon".
+   * @return {{type: "emoji", emoji: string}|{}}
+   */
+  emoji(value, type) {
+    let out = {}
+    let p = {}
+    if (!isEmptyVariable(value)) {
+      p.type = 'emoji'
+      p.emoji = value
+    }
+    if (type === 'icon') {
+      out[ type ] = p
+      if (!this.data[ type ]) this.data[ type ] = {}
+      this.data[ type ] = p
+      return out
+    }
+    return p
   }
 
   /**
@@ -678,17 +762,35 @@ class NotionPage {
     */
     return null
   }
+
+  /**
+   * Get page cover
+   * @return {string|null} url of cover image
+   */
   getCover() {
-    var result = null
+    let result = null
     if (this.validPage && this.page.cover) {
-      var cover = this.page.cover
+      const cover = this.page.cover
       result = cover[ cover.type ][ 'url' ] || null
     }
     return result
   }
+
+  /**
+   * Get page icon
+   * @return {string|null} url of icon image or emoji
+   */
   getIcon() {
-    return null
+    let result = null
+    if (this.validPage && this.page.icon) {
+      const icon = this.page.icon
+      const type = icon.type
+      if (type == NOTION_FILE_TYPE.emoji) result = icon.emoji || null
+      else if (type == NOTION_FILE_TYPE.external) result = icon.external.url || null
+    }
+    return result
   }
+
   isArchived() {
     if (this.validPage) {
       return this.page.archived
