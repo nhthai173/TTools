@@ -28,6 +28,19 @@ var NOTION_DATA_TYPE = {
   date: 'date'
 }
 
+var NOTION_OPTION_COLORS = {
+  default: "default",
+  gray: "gray",
+  brown: "brown",
+  red: "red",
+  orange: "orange",
+  yellow: "yellow",
+  green: "green",
+  blue: "blue",
+  purple: "purple",
+  pink: "pink"
+}
+
 
 
 
@@ -241,19 +254,26 @@ class NotionAPI {
 
 // --------- //
 
+/**
+ * Create Notion page properties
+ * @class
+ */
 class NotionPropertyMaker {
+  
   constructor() {
     this.data = { "properties": {} }
   }
 
   /**
-   * @param{string} name Property Name
-   * @param{string} value Property Value
+   * Add title property
+   * @param {string} name Property Name
+   * @param {string} value Property Value
+   * @return {{}} Notion property as json
    */
-  title(name = '', value = '') {
-    var p = {}
-    var out = {}
-    if (name && value != undefined) {
+  title(name, value) {
+    let p = {}
+    let out = {}
+    if (!isEmptyVariable(name) && value != undefined) {
       p = {
         "title": [ {
           "text": {
@@ -268,13 +288,15 @@ class NotionPropertyMaker {
   }
 
   /**
-   * @param{string} name Property Name
-   * @param{string} value Property Value
+   * Add rich text property
+   * @param {string} name Property Name
+   * @param {string} value Property Value
+   * @return {{}} Notion property as json
    */
-  rich_text(name = '', value = '') {
-    var p = {}
-    var out = {}
-    if (name && value != undefined) {
+  rich_text(name, value) {
+    let p = {}
+    let out = {}
+    if (!isEmptyVariable(name) && value != undefined) {
       p = {
         "rich_text": [ {
           "text": {
@@ -289,18 +311,22 @@ class NotionPropertyMaker {
   }
 
   /**
-   * @param{string} name Property Name
-   * @param{string} value Property Value
+   * Add select property
+   * @param {string} name Property Name
+   * @param {string} value Name of the option. If option does not exist, it will be created
+   * @param {string} [color=default] Color of the option. Defaults to "default". Possible values in `NOTION_OPTION_COLORS`
+   * @return {{}} Notion property as json
    */
-  select(name = '', value = '') {
-    var p = {}
-    var out = {}
-    if (name && value != undefined) {
+  select(name, value, color) {
+    let p = {}
+    let out = {}
+    if (!isEmptyVariable(name) && value != undefined) {
       p = {
         "select": {
           "name": String(value)
         }
       }
+      if (!isEmptyVariable(color)) p.select.color = color
       out[ name ] = p
       this.data.properties[ name ] = p
     }
@@ -308,13 +334,15 @@ class NotionPropertyMaker {
   }
 
   /**
-   * @param{string} name Property Name
-   * @param{number} value Property Value
+   * Add number property
+   * @param {string} name Property Name
+   * @param {number} value Property Value
+   * @return {{}} Notion property as json
    */
-  number(name = '', value = '') {
-    var p = {}
-    var out = {}
-    if (name && value != undefined) {
+  number(name, value) {
+    let p = {}
+    let out = {}
+    if (!isEmptyVariable(name) && value != undefined) {
       p = {
         "number": parseFloat(value)
       }
@@ -325,16 +353,20 @@ class NotionPropertyMaker {
   }
 
   /**
-   * @param{string} name Property Name
-   * @param{string} value Property Value
+   * Add status property
+   * @param {string} name Property Name
+   * @param {string} value Property Value
+   * @param {string} [color=default] Color of the option. Defaults to "default". Possible values in `NOTION_OPTION_COLORS`
+   * @return {{}} Notion property as json
    */
-  status(name = '', value = '') {
-    var p = {}
-    var out = {}
-    if (name && value != undefined) {
+  status(name, value, color) {
+    let p = {}
+    let out = {}
+    if (!isEmptyVariable(name) && value != undefined) {
       p = {
         "name": String(value)
       }
+      if (!isEmptyVariable(color)) p.color = color
       out[ name ] = p
       this.data.properties[ name ] = p
     }
@@ -342,23 +374,33 @@ class NotionPropertyMaker {
   }
 
   /**
-   * @param{string} name Property Name
-   * @param value Array of ID
+   * Add multi select property
+   * @param {string} name Property Name
+   * @param {string[]} value Array of option's name. If option does not exist, it will be created
+   * @param {string} type Type of the option value. Possible values are: "name", "id". Defaults to "name"
+   * @return {{}} Notion property as json
    */
-  multi_select(name = '', value = [ '' ]) {
-    var p = {}
-    var out = {}
-    if (name && Array.isArray(value) && value.length) {
-      var valid = false
+  multi_select(name, value, type = 'name') {
+    let p = {}
+    let out = {}
+    if (!isEmptyVariable(name)) {
+      let valid = false
       p = {
         "multi_select": []
       }
-      value.forEach(v => {
-        if (v != null && v != '') {
-          p[ 'multi_select' ].push({ "name": v },)
-          valid = true
-        }
-      })
+      if (isValidArray(value)) {
+        value.forEach(v => {
+          if (!isEmptyVariable(v)) {
+            if (type === 'name')
+              p[ 'multi_select' ].push({ "name": v })
+            else if (type === 'id')
+              p[ 'multi_select' ].push({ "id": v })
+            valid = true
+          }
+        })
+      } else if (Array.isArray(value) && value.length === 0) {
+        valid = true
+      }
       if (valid) {
         out[ name ] = p
         this.data.properties[ name ] = p
@@ -368,23 +410,29 @@ class NotionPropertyMaker {
   }
 
   /**
-   * @param{string} name Property Name
-   * @param value Array of ID
+   * Add relation property
+   * @param {string} name Property Name
+   * @param {string[]} value Array of relation page id.
+   * @return {{}} Notion property as json
    */
-  relation(name = '', value = [ '' ]) {
-    var p = {}
-    var out = {}
-    if (name && Array.isArray(value) && value.length) {
-      var valid = false
+  relation(name, value) {
+    let p = {}
+    let out = {}
+    if (!isEmptyVariable(name)) {
+      let valid = false
       p = {
         "relation": []
       }
-      value.forEach(v => {
-        if (v != null && v != '') {
-          p[ 'relation' ].push({ "id": v },)
-          valid = true
-        }
-      })
+      if (isValidArray(value)) {
+        value.forEach(v => {
+          if (v != null && v != '') {
+            p[ 'relation' ].push({ "id": v },)
+            valid = true
+          }
+        })
+      } else if (Array.isArray(value) && value.length === 0) {
+        valid = true
+      }
       if (valid) {
         out[ name ] = p
         this.data.properties[ name ] = p
@@ -394,13 +442,15 @@ class NotionPropertyMaker {
   }
 
   /**
-   * @param{string} name Property Name
-   * @param{boolean} value true or false
+   * Add checkbox property
+   * @param {string} name Property Name
+   * @param {boolean} value true or false
+   * @return {{}} Notion property as json
    */
   checkbox(name = '', value = false) {
-    var p = {}
-    var out = {}
-    if (name && value != undefined) {
+    let p = {}
+    let out = {}
+    if (!isEmptyVariable(name) && value != undefined) {
       p = {
         "checkbox": value
       }
@@ -411,13 +461,15 @@ class NotionPropertyMaker {
   }
 
   /**
-   * @param{string} name Property Name
-   * @param{string} value Property Value
+   * Add url property
+   * @param {string} name Property Name
+   * @param {string} value Property Value
+   * @return {{}} Notion property as json
    */
   url(name, value) {
-    var p = {}
-    var out = {}
-    if (name && value != undefined) {
+    let p = {}
+    let out = {}
+    if (!isEmptyVariable(name) && value != undefined) {
       p = {
         "url": value
       }
@@ -428,13 +480,15 @@ class NotionPropertyMaker {
   }
 
   /**
-   * @param{string} name Property Name
-   * @param{string} value Property Value
+   * Add email property
+   * @param {string} name Property Name
+   * @param {string} value Property Value
+   * @return {{}} Notion property as json
    */
   email(name, value) {
-    var p = {}
-    var out = {}
-    if (name && value != undefined) {
+    let p = {}
+    let out = {}
+    if (!isEmptyVariable(name) && value != undefined) {
       p = {
         "email": value
       }
@@ -445,13 +499,15 @@ class NotionPropertyMaker {
   }
 
   /**
-   * @param{string} name Property Name
-   * @param{number} value Property Value
+   * Add phone number property
+   * @param {string} name Property Name
+   * @param {number} value Property Value
+   * @return {{}} Notion property as json
    */
   phone_number(name, value) {
-    var p = {}
-    var out = {}
-    if (name && value != undefined) {
+    let p = {}
+    let out = {}
+    if (!isEmptyVariable(name) && value != undefined) {
       p = {
         "phone_number": value
       }
@@ -462,13 +518,15 @@ class NotionPropertyMaker {
   }
 
   /**
-   * @param{string} name Property name
-   * @param{any} value Date or object {start: Date, end: Date, time_zone: string}
+   * Add Date property
+   * @param {string} name Property name
+   * @param {Date|{start: Date, end: Date, time_zone: string}} value Date or object {start: Date, end: Date, time_zone: string}
+   * @return {{}} Notion property as json
    */
   date(name, value) {
-    var p = {}
-    var out = {}
-    if (name && value && Object.keys(value).length) {
+    let p = {}
+    let out = {}
+    if (!isEmptyVariable(name) && isValidObject(value)) {
       p = {
         "date": {}
       }
@@ -480,7 +538,7 @@ class NotionPropertyMaker {
         p[ 'date' ][ 'time_zone' ] = value.time_zone
       out[ name ] = p
       this.data.properties[ name ] = p
-    } else if (name && value != undefined) {
+    } else if (!isEmptyVariable(name) && value != undefined) {
       p = {
         "date": {
           start: Utilities.formatDate(value, 'GMT+7', "yyyy-MM-dd'T'HH:mm:ss'Z'"),
@@ -492,9 +550,15 @@ class NotionPropertyMaker {
     }
     return out
   }
+
+  /**
+   * Get all properties as JSON
+   * @return {{}}
+   */
   getJSON() {
     return this.data
   }
+
 }
 
 
