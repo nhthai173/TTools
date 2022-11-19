@@ -259,7 +259,7 @@ class NotionAPI {
  * @class
  */
 class NotionPropertyMaker {
-  
+
   constructor() {
     this.data = { "properties": {} }
   }
@@ -314,7 +314,7 @@ class NotionPropertyMaker {
    * Add select property
    * @param {string} name Property Name
    * @param {string} value Name of the option. If option does not exist, it will be created
-   * @param {string} [color=default] Color of the option. Defaults to "default". Possible values in `NOTION_OPTION_COLORS`
+   * @param {string} [color=default] Color of the option. Not currently editable. Defaults to "default". Possible values in `NOTION_OPTION_COLORS`
    * @return {{}} Notion property as json
    */
   select(name, value, color) {
@@ -326,7 +326,7 @@ class NotionPropertyMaker {
           "name": String(value)
         }
       }
-      if (!isEmptyVariable(color)) p.select.color = color
+      // if (!isEmptyVariable(color)) p.select.color = color
       out[ name ] = p
       this.data.properties[ name ] = p
     }
@@ -356,7 +356,7 @@ class NotionPropertyMaker {
    * Add status property
    * @param {string} name Property Name
    * @param {string} value Property Value
-   * @param {string} [color=default] Color of the option. Defaults to "default". Possible values in `NOTION_OPTION_COLORS`
+   * @param {string} [color=default] Color of the option. Not currently editable. Defaults to "default". Possible values in `NOTION_OPTION_COLORS`
    * @return {{}} Notion property as json
    */
   status(name, value, color) {
@@ -366,7 +366,7 @@ class NotionPropertyMaker {
       p = {
         "name": String(value)
       }
-      if (!isEmptyVariable(color)) p.color = color
+      // if (!isEmptyVariable(color)) p.color = color
       out[ name ] = p
       this.data.properties[ name ] = p
     }
