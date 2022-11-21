@@ -1159,7 +1159,7 @@ class NotionDatabase {
   /**
    * Get all pages data in database
    * @param {string} id database id
-   * @param {{filter: {}, sorts: []}} query query object
+   * @param {{filter: {}, sorts: []}} query query object. Can create with NotionFilterMaker and NotionSortMaker
    * @return {{}} Response object from Notion API
    */
   getByDatabaseId(id = '', query = {}) {
@@ -1168,7 +1168,7 @@ class NotionDatabase {
 
   /**
    * Load data from Notion database
-   * @param {{filter: {}, sorts: []}} query query object
+   * @param {{filter: {}, sorts: []}} query query object. Can create with NotionFilterMaker and NotionSortMaker
    * @return {NotionPage[]}
    */
   load(query = {}) {
