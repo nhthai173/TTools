@@ -1157,35 +1157,37 @@ class NotionDatabase {
   }
 
   /**
-   * 
-   * @param id string - database id
-   * @return object - data got from notion
+   * Get all pages data in database
+   * @param {string} id database id
+   * @param {{filter: {}, sorts: []}} query query object
+   * @return {{}} Response object from Notion API
    */
-  getByDatabaseId(id = '') {
-    return new NotionAPI({ token: this.token }).getDatabaseById(id)
+  getByDatabaseId(id = '', query = {}) {
+    return new NotionAPI({ token: this.token }).getDatabaseById(id, query)
   }
 
   /**
-   * Load data from notion database
-   * @returns array of `NotionPage`
+   * Load data from Notion database
+   * @param {{filter: {}, sorts: []}} query query object
+   * @return {NotionPage[]}
    */
-  load() {
-    // var results = []
-    var results = [ new NotionPage() ] // for auto-complete
-    var data = {}
-    if (this.data && this.data.results) {
-      data = this.data.results
-    } else if (this.databaseId) {
-      data = this.getByDatabaseId(this.databaseId)
+  load(query = {}) {
+    let results = [ new NotionPage() ] // for auto-complete
+    let data = this.data
+    if (!data || !data.results || !data.results.length) {
+      if(this.databaseId){
+        data = this.getByDatabaseId(this.databaseId, query)
+      }else{
+        return []
+      }
     }
-    if (data && data.results && data.results.length) {
-      results = []
-      data.results.forEach(page => {
-        results.push(new NotionPage({ page: page, token: this.token }))
-      })
-    }
+    results = []
+    data.results.forEach(page => {
+      results.push(new NotionPage({ page: page, token: this.token }))
+    })
     return results
   }
+
 }
 
 class NotionPage {
