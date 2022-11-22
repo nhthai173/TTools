@@ -58,6 +58,18 @@ function NOTION() {
     NotionPropertyMaker: function () {
       return new NotionPropertyMaker()
     },
+    NotionFilterMaker: function () {
+      return NotionFilterMaker
+    },
+    NotionSortMaker: function () {
+      return new NotionSortMaker()
+    },
+    NotionPageIconMaker: function (type = '', value) {
+      return NotionPageIconMaker(type, value)
+    },
+    NotionPageCoverMaker(type = '', value) {
+      return NotionPageCoverMaker(type, value)
+    },
     NotionDatabase: function ({ data = {}, databaseId = '', token = '' } = {}) {
       return new NotionDatabase({ data, databaseId, token })
     },
@@ -167,9 +179,7 @@ var NotionFilterMaker = {
   _propertyFilter(propName, propType, filterType, value) {
     return {
       property: propName,
-      [ propType ]: {
-        [ filterType ]: NotionFilter[ filterType ](value)
-      }
+      [ propType ]: NotionFilter[ filterType ](value)
     }
   },
 
@@ -584,7 +594,7 @@ class NotionSortMaker {
    * Get all properties as JSON
    * @return {{}}
    */
-  getJSON(){
+  getJSON() {
     return this.data
   }
 
@@ -1142,9 +1152,10 @@ class NotionAPI {
 class NotionDatabase {
 
   /**
-   * 
-   * @param data object - data got from notion
-   * @param databaseId string - database id
+   * @param {Object} options
+   * @param {string} options.token Notion private token
+   * @param {{}} [options.data] data got from notion
+   * @param {string} [options.databaseId] UUIDv4 string
    */
   constructor({ data = {}, databaseId = '', token = '' } = {}) {
     this.token = token || ''
@@ -1175,9 +1186,9 @@ class NotionDatabase {
     let results = [ new NotionPage() ] // for auto-complete
     let data = this.data
     if (!data || !data.results || !data.results.length) {
-      if(this.databaseId){
+      if (this.databaseId) {
         data = this.getByDatabaseId(this.databaseId, query)
-      }else{
+      } else {
         return []
       }
     }
@@ -1191,6 +1202,14 @@ class NotionDatabase {
 }
 
 class NotionPage {
+
+  /**
+   * 
+   * @param {Object} options
+   * @param {string} [options.token] Notion private token
+   * @param {{}} [options.page] data got from Notion API
+   * @param {string} [options.pageId] UUIDv4 string
+   */
   constructor({ page = {}, pageId = '', token = '' } = {}) {
     this.token = token || ''
     if (page && Object.keys(page).length)
@@ -1201,22 +1220,37 @@ class NotionPage {
       this.validPage = true
     }
   }
+
+  /**
+   * Return UUIDv4 string page id
+   * @returns {string|""}
+   */
   getId() {
     if (this.validPage) {
       return this.page.id
     }
     return ''
   }
+
+  /**
+   * Return page url
+   * @returns {string|""}
+   */
   getUrl() {
     if (this.validPage) {
       return this.page.url
     }
     return ''
   }
+
+  /**
+   * Return first parent database id (UUIDv4 string)
+   * @returns {{database: string}|{}}
+   */
   getParent() {
-    var result = {}
+    let result = {}
     if (this.validPage && this.page.parent) {
-      var parent = this.page.parent
+      let parent = this.page.parent
       switch (parent.type) {
         case 'database_id':
           result[ 'database' ] = parent.database_id
@@ -1225,39 +1259,57 @@ class NotionPage {
     }
     return result
   }
+
+  /**
+   * Return created time
+   * @returns {Date|null}
+   */
   getCreatedTime() {
     if (this.validPage) {
       return new Date(this.page.created_time)
     }
     return null
   }
+
+  /**
+   * Return last edited time
+   * @returns {Date|null}
+   */
   getLastEditedTime() {
     if (this.validPage) {
       return new Date(this.page.last_edited_time)
     }
     return null
   }
+
+  /**
+   * Return user UUIDv4 string
+   * @returns {string|""}
+   */
   getCreator() {
-    /*
-      "created_by": {
-        "object": "user",
-        "id": "3e1fe115-5a9f-454e-b8b2-594e974a9022"
+    if (this.validPage) {
+      if (this.page.created_by) {
+        return this.page.created_by.id || ""
       }
-    */
-    return null
-  }
-  getLastEdited() {
-    /*
-      "last_edited_by": {
-        "object": "user",
-        "id": "3e1fe115-5a9f-454e-b8b2-594e974a9022"
-      }
-    */
-    return null
+    }
+    return ""
   }
 
   /**
-   * Get page cover
+   * Return user UUIDv4 string
+   * @returns {string|""}
+   */
+  getLastEdited() {
+    if (this.validPage) {
+      if (this.page.last_edited_by) {
+        return this.page.last_edited_by.id || ""
+      }
+    }
+    return ""
+  }
+
+  /**
+   * Return cover url
    * @return {string|null} url of cover image
    */
   getCover() {
@@ -1284,14 +1336,23 @@ class NotionPage {
     return result
   }
 
+  /**
+   * Is page archived
+   * @returns {Boolean}
+   */
   isArchived() {
     if (this.validPage) {
       return this.page.archived
     }
-    return null
+    return false
   }
+
+  /**
+   * Get page properties
+   * @returns {NotionProperty[]|[]}
+   */
   getProperties() {
-    var results = []
+    let results = []
     if (this.validPage) {
       for (const propName in this.page.properties) {
         const prop = {
@@ -1303,8 +1364,14 @@ class NotionPage {
     }
     return results
   }
+
+  /**
+   * Get a property by name
+   * @param {string} propertyName 
+   * @returns {NotionProperty|null}
+   */
   getPropertyByName(propertyName = '') {
-    var result = new NotionProperty(null)
+    let result = null
     if (this.validPage && propertyName) {
       this.getProperties().forEach(prop => {
         if (propertyName == prop.name) {
@@ -1314,9 +1381,14 @@ class NotionPage {
     }
     return result
   }
+
+  /**
+   * Get all properties as JSON
+   * @returns {{}} {property_name: property_value}
+   */
   getPropertiesJSON() {
     if (this.validPage) {
-      var result = {}
+      let result = {}
       this.getProperties().forEach(prop => {
         result[ prop.name ] = prop.getValue()
       })
@@ -1324,9 +1396,14 @@ class NotionPage {
     }
     return {}
   }
+
+  /**
+   * Get all properties as JSON. All value is string
+   * @returns {{}} {property_name: property_string_value}
+   */
   getPropertiesJSONText() {
     if (this.validPage) {
-      var result = {}
+      let result = {}
       this.getProperties().forEach(prop => {
         result[ prop.name ] = prop.getValueText()
       })
@@ -1334,12 +1411,50 @@ class NotionPage {
     }
     return {}
   }
-  updatePage(payload = {}) {
-    return new NotionAPI({ token: this.token }).updatePage(this.getId(), payload)
+
+  /**
+   * Update page
+   * @param {{archived: Boolean, icon: {}, cover: {}, properties: {}}} payload 
+   * @param {string} [token] Notion private token. If not provided, use token in constructor
+   * @returns {{}|null} Request response. Null if token is not provided
+   */
+  updatePage(payload = {}, token) {
+    let _token = ''
+    if (!this.token && token) {
+      this.token = token
+      _token = token
+    }
+    else if (this.token && token) {
+      _token = token
+    }
+    else {
+      console.error('Can not update page. Missing token')
+      return null
+    }
+    return new NotionAPI({ token: _token }).updatePage(this.getId(), payload)
   }
-  deletePage() {
-    return new NotionAPI({ token: this.token }).deletePage(this.getId())
+
+  /**
+   * Delete page
+   * @param {string} [token] Notion private token. If not provided, use token in constructor
+   * @returns {{}|null} Request response. Null if token is not provided
+   */
+  deletePage(token) {
+    let _token = ''
+    if (!this.token && token) {
+      this.token = token
+      _token = token
+    }
+    else if (this.token && token) {
+      _token = token
+    }
+    else {
+      console.error('Can not update page. Missing token')
+      return null
+    }
+    return new NotionAPI({ token: _token }).deletePage(this.getId())
   }
+
 }
 
 class NotionProperty {
