@@ -997,9 +997,10 @@ class NotionAPI {
    * Get Notion database data by database id
    * @param {string} id Database id
    * @param {{}} payload request payload
+   * @param {number} limit Number of records to return
    * @return {{results: {}[]}}
    */
-  getDatabaseById(id = '', payload = {}) {
+  getDatabaseById(id = '', payload = {}, limit) {
     let out = {}
     const headers = this._generateHeader()
     if (!headers) return out
@@ -1016,6 +1017,10 @@ class NotionAPI {
     })
     if (res.getResponseCode() == '200') {
       out = JSON.parse(res.getContentText())
+      if (limit && out.results.length >= limit) {
+        out.results = out.results.slice(0, limit)
+        return out
+      }
       if (out.next_cursor) {
         let np = this.getDatabaseById(id, {
           start_cursor: out.next_cursor
@@ -1171,23 +1176,25 @@ class NotionDatabase {
    * Get all pages data in database
    * @param {string} id database id
    * @param {{filter: {}, sorts: []}} query query object. Can create with NotionFilterMaker and NotionSortMaker
+   * @param {number} limit Number of records to return
    * @return {{}} Response object from Notion API
    */
-  getByDatabaseId(id = '', query = {}) {
-    return new NotionAPI({ token: this.token }).getDatabaseById(id, query)
+  getByDatabaseId(id = '', query = {}, limit) {
+    return new NotionAPI({ token: this.token }).getDatabaseById(id, query, limit)
   }
 
   /**
    * Load data from Notion database
    * @param {{filter: {}, sorts: []}} query query object. Can create with NotionFilterMaker and NotionSortMaker
+   * @param {number} limit Number of records to return
    * @return {NotionPage[]}
    */
-  load(query = {}) {
+  load(query = {}, limit) {
     let results = [ new NotionPage() ] // for auto-complete
     let data = this.data
     if (!data || !data.results || !data.results.length) {
       if (this.databaseId) {
-        data = this.getByDatabaseId(this.databaseId, query)
+        data = this.getByDatabaseId(this.databaseId, query, limit)
       } else {
         return []
       }
@@ -1420,14 +1427,11 @@ class NotionPage {
    */
   updatePage(payload = {}, token) {
     let _token = ''
-    if (!this.token && token) {
-      this.token = token
-      _token = token
-    }
-    else if (this.token && token) {
-      _token = token
-    }
-    else {
+    if (this.token) _token = this.token
+    if (token) _token = token
+    if (_token) {
+      if (!this.token) this.token = _token
+    } else {
       console.error('Can not update page. Missing token')
       return null
     }
@@ -1441,14 +1445,11 @@ class NotionPage {
    */
   deletePage(token) {
     let _token = ''
-    if (!this.token && token) {
-      this.token = token
-      _token = token
-    }
-    else if (this.token && token) {
-      _token = token
-    }
-    else {
+    if (this.token) _token = this.token
+    if (token) _token = token
+    if (_token) {
+      if (!this.token) this.token = _token
+    } else {
       console.error('Can not update page. Missing token')
       return null
     }
