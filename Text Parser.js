@@ -212,3 +212,31 @@ function parseCurrency(str = '', thousandSeparator = '.', decimalSeparator = ','
   }
   return num
 }
+
+
+
+
+
+/**
+ * Split string by a pair of separator
+ * @param {string} str string to split
+ * @param {string} start start separator
+ * @param {string} end end separator
+ * @returns {string[]}
+ */
+function splitBySepPair(str = '', start = '', end = '') {
+  if (!start || !end) return str
+  let result = []
+  let temp = ''
+  let cnt = 0
+  for (let i = 0; i < str.length; i++) {
+    if (str[ i ] === start) cnt++
+    if (cnt > 0) temp += str[ i ]
+    if (str[ i ] === end) cnt--
+    if (cnt === 0 && temp) {
+      result.push(temp)
+      temp = ''
+    }
+  }
+  return result
+}
