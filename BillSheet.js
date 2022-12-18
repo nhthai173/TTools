@@ -244,7 +244,7 @@ class BillSheetClass {
    */
   _dataRange(sheet) {
     if (!sheet) sheet = this._sheet()
-    if (!ss) return null
+    if (!sheet) return null
     if (isValidArray(this.header)) {
       const [ row, col ] = this.header
       if (!this.startRow) this.startRow = row + 1
@@ -254,7 +254,7 @@ class BillSheetClass {
       if (!this.startColumn) this.startColumn = 1
     }
     if (!this.startRow || !this.startColumn) return null
-    return ss.getRange(this.startRow, this.startColumn, ss.getLastRow() - this.startRow + 1, ss.getLastColumn() - this.startColumn + 1)
+    return sheet.getRange(this.startRow, this.startColumn, sheet.getLastRow() - this.startRow + 1, sheet.getLastColumn() - this.startColumn + 1)
   }
 
   /**
