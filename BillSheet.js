@@ -54,7 +54,8 @@ class BillSheetClass {
     * @param {Object} options
     * @param {string} options.sheetId Google Sheet ID
     * @param {string} options.sheetName Google Sheet Name
-    * @param {{}} options.path Pairs of key and column index
+    * @param {{}|undefined} options.path Pairs of key and column index
+    * @param {number[]|{}} options.header Header configuration. If it is an array, it is the range of header (like getRange()). Now `path` will be auto detected with the propName is the value of cell and the column index. If it is an object, it is the same with `path`.
     * @param {string} [options.sortProp] Name of property to sort
     * @param {string} [options.sortType] sortProp type, "number" | "string"
     * @param {string|string[]} [options.emptyPropList] List of property name. If these properties of row are empty, the row will be removed
@@ -68,6 +69,9 @@ class BillSheetClass {
     sheetId = '',
     sheetName = '',
     path = {},
+    header = [] || {},
+    startRow = 0,
+    startColumn = 0,
     sortProp = '',
     sortType = '',
     emptyPropList = [],
@@ -75,7 +79,6 @@ class BillSheetClass {
     transform = {},
     beforeAppend,
     afterGet,
-    fCustom // deprecated
   } = {}) {
 
     /** 
@@ -86,16 +89,61 @@ class BillSheetClass {
     this.sheetId = sheetId || ''
     this.sheetName = sheetName || ''
     this.path = path || {}
+    this.header = header || {}
+    this.startRow = startRow || 0
+    this.startColumn = startColumn || 0
     this.sortProp = sortProp || ''
     this.sortType = sortType || ''
     this.emptyPropList = emptyPropList
     this.uniquePropList = uniquePropList
     this.transform = {}
 
+    // If no specific sheetId, use default sheet id
     if (!this.sheetId) {
       console.warn('sheetId is empty, using default sheet id: D_SHEET_ID\nThis is deprecated, please specify sheetId in the future.')
       this.sheetId = D_SHEET_ID
     }
+
+    // Init sheet header, priority: path > header.
+    if (!isValidObject(this.path)) {
+      if (isValidArray(header)) {
+        const ss = this._sheet()
+        if (ss) {
+          const [ row, column, numRow, numColumn ] = header
+          let range = null
+          if (numRow && numRow != 1) {
+            this._errorLog('header_parse')
+          } else {
+            numRow = 1
+          }
+          if (numRow == 1 && row && column) {
+            try {
+              if (!numColumn)
+                numColumn = ss.getLastColumn() - column + 1
+              range = ss.getRange(row, column, numRow, numColumn)
+            } catch (e) {
+              this._errorLog('header_parse_error', e)
+            }
+          }
+          if (range) {
+            const head = range.getValues()
+            if (head[ 0 ] && isValidArray(head[ 0 ])) {
+              for (const i in head[ 0 ]) {
+                this.path[ head[ 0 ][ i ] ] = Number(i)
+              }
+            }
+            if (!this.startRow) this.startRow = row + 1
+            if (!this.startColumn) this.startColumn = column
+          }
+        }
+
+      } else if (isValidObject(header)) {
+        this.path = header
+      }
+    }
+
+    // Init `startRow` and `startColumn`
+    this._dataRange()
 
     if (!isValidArray(this.emptyPropList) && !isEmptyVariable(emptyPropList)) {
       this.emptyPropList = [ emptyPropList ]
@@ -145,12 +193,28 @@ class BillSheetClass {
         }
       })
     }
+    if (type === 'header_parse') {
+      console.error({
+        message: 'Can not be parsed header correctly. Only allow 1 row',
+        detail: {
+          header: this.header
+        }
+      })
+    }
+    if (type === 'header_parse_error') {
+      console.error({
+        message: 'Can not be parsed header correctly.\n' + msg ? msg : '',
+        detail: {
+          header: this.header
+        }
+      })
+    }
   }
 
   /**
    * Return sheet object
    * 
-   * @return {GoogleAppsScript.Spreadsheet.Sheet}
+   * @return {Spreadsheet.Sheet|null}
    */
   _sheet() {
     const { sheetId, sheetName } = this
@@ -160,6 +224,26 @@ class BillSheetClass {
       this._errorLog('sheet')
       return null
     }
+  }
+
+  /**
+   * Return data range
+   * @param {Spreadsheet.Sheet|undefined} sheet
+   * @returns {SpreadsheetApp.Range|null}
+   */
+  _dataRange(sheet) {
+    if (!sheet) sheet = this._sheet()
+    if (!ss) return null
+    if (isValidArray(this.header)) {
+      const [ row, col ] = this.header
+      if (!this.startRow) this.startRow = row + 1
+      if (!this.startColumn) this.startColumn = col
+    } else if (isValidObject(this.path)) {
+      if (!this.startRow) this.startRow = 2
+      if (!this.startColumn) this.startColumn = 1
+    }
+    if (!this.startRow || !this.startColumn) return null
+    return ss.getRange(this.startRow, this.startColumn, ss.getLastRow() - this.startRow + 1, ss.getLastColumn() - this.startColumn + 1)
   }
 
   /**
@@ -386,10 +470,11 @@ class BillSheetClass {
 
     // Get current sheet data
     const ss = this._sheet()
-    if (ss === null) return false
-    if (ss.getLastRow() < 2) return this.append(newData)
-
-    sheetRange = ss.getRange(2, 1, ss.getLastRow() - 1, ss.getLastColumn())
+    if (!ss) return false
+    if (ss.getLastRow() < this.startRow) return this.append(newData)
+    
+    sheetRange = this._dataRange(ss)
+    if (!sheetRange) return false
     sheetData = sheetRange.getValues()
 
     for (let sData of newData) {
@@ -666,10 +751,11 @@ class BillSheetClass {
 
     if (props.sortProp || props.emptyPropList.length || props.uniquePropList.length) {
       const ss = this._sheet()
-      if (ss === null) return
-      if (ss.getLastRow() < 2) return
+      if (!ss) return
+      if (ss.getLastRow() < this.startRow) return
 
-      const range = ss.getRange(2, 1, ss.getLastRow() - 1, ss.getLastColumn())
+      const range = this._dataRange(ss)
+      if (!range) return
       let data = range.getValues()
 
       // remove row
@@ -773,10 +859,12 @@ class BillSheetClass {
     let out = []
     const ss = this._sheet()
 
-    if (ss === null) return out
-    if (ss.getLastRow() < 2) return out
+    if (!ss) return out
+    if (ss.getLastRow() < this.startRow) return out
 
-    let data = ss.getRange(2, 1, ss.getLastRow() - 1, ss.getLastColumn()).getValues()
+    let range = this._dataRange(ss)
+    if (!range) return out
+    let data = range.getValues()
     for (const i in data) {
       const sData = this._toJSON(data[ i ], {
         ignoreEmpty: false,
