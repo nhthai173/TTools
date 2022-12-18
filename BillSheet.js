@@ -120,7 +120,7 @@ class BillSheetClass {
       if (isValidArray(header)) {
         const ss = this._sheet()
         if (ss) {
-          const [ row, column, numRow, numColumn ] = header
+          let [ row, column, numRow, numColumn ] = header
           let range = null
           if (numRow && numRow != 1) {
             this._errorLog('header_parse')
