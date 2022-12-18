@@ -4,7 +4,10 @@
   * @param {Object} options
   * @param {string} options.sheetId Google Sheet ID
   * @param {string} options.sheetName Google Sheet Name
-  * @param {{}} options.path Pairs of key and column index
+  * @param {{}|undefined} [options.path] Pairs of key and column index
+  * @param {number[]|{}} [options.header] Header configuration. If it is an array, it is the range of header (like getRange()). Now `path` will be auto detected with the propName is the value of cell and the column index. If it is an object, it is the same with `path`.
+  * @param {number} [options.startRow] Start row index
+  * @param {number} [options.startColumn] Start column index
   * @param {string} [options.sortProp] Name of property to sort
   * @param {string} [options.sortType] sortProp type, "number" | "string"
   * @param {string[]} [options.emptyPropList] List of property name. If these properties of row are empty, the row will be removed
@@ -18,19 +21,25 @@ function BillSheet({
   sheetId = '',
   sheetName = '',
   path = {},
+  header = [] || {},
+  startRow = 0,
+  startColumn = 0,
   sortProp = '',
   sortType = '',
   emptyPropList = [],
   uniquePropList = [],
   transform = {},
   beforeAppend,
-  afterGet
+  afterGet,
 } = {}) {
 
   return new BillSheetClass({
     sheetId,
     sheetName,
     path,
+    header,
+    startRow,
+    startColumn,
     sortProp,
     sortType,
     emptyPropList,
@@ -54,8 +63,10 @@ class BillSheetClass {
     * @param {Object} options
     * @param {string} options.sheetId Google Sheet ID
     * @param {string} options.sheetName Google Sheet Name
-    * @param {{}|undefined} options.path Pairs of key and column index
-    * @param {number[]|{}} options.header Header configuration. If it is an array, it is the range of header (like getRange()). Now `path` will be auto detected with the propName is the value of cell and the column index. If it is an object, it is the same with `path`.
+    * @param {{}|undefined} [options.path] Pairs of key and column index
+    * @param {number[]|{}} [options.header] Header configuration. If it is an array, it is the range of header (like getRange()). Now `path` will be auto detected with the propName is the value of cell and the column index. If it is an object, it is the same with `path`.
+    * @param {number} [options.startRow] Start row index
+    * @param {number} [options.startColumn] Start column index
     * @param {string} [options.sortProp] Name of property to sort
     * @param {string} [options.sortType] sortProp type, "number" | "string"
     * @param {string|string[]} [options.emptyPropList] List of property name. If these properties of row are empty, the row will be removed
@@ -472,7 +483,7 @@ class BillSheetClass {
     const ss = this._sheet()
     if (!ss) return false
     if (ss.getLastRow() < this.startRow) return this.append(newData)
-    
+
     sheetRange = this._dataRange(ss)
     if (!sheetRange) return false
     sheetData = sheetRange.getValues()
