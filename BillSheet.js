@@ -2,6 +2,7 @@
   * Easiest way to interact with GSheet
   * 
   * @param {Object} options
+  * @param {SpreadsheetApp.Sheet} options.sheet Google Sheet. If it is not null, sheetId and sheetName will be ignored.
   * @param {string} options.sheetId Google Sheet ID
   * @param {string} options.sheetName Google Sheet Name
   * @param {{}|undefined} [options.path] Pairs of key and column index
@@ -18,6 +19,7 @@
   * @return {BillSheetClass}
   */
 function BillSheet({
+  sheet = null,
   sheetId = '',
   sheetName = '',
   path = {},
@@ -34,6 +36,7 @@ function BillSheet({
 } = {}) {
 
   return new BillSheetClass({
+    sheet,
     sheetId,
     sheetName,
     path,
@@ -61,6 +64,7 @@ class BillSheetClass {
 
   /** 
     * @param {Object} options
+    * @param {SpreadsheetApp.Sheet} options.sheet Google Sheet. If it is not null, sheetId and sheetName will be ignored.
     * @param {string} options.sheetId Google Sheet ID
     * @param {string} options.sheetName Google Sheet Name
     * @param {{}|undefined} [options.path] Pairs of key and column index
@@ -77,6 +81,7 @@ class BillSheetClass {
     * @param {Function} [options.fCustom] DEPRECATED
     */
   constructor({
+    sheet = null,
     sheetId = '',
     sheetName = '',
     path = {},
@@ -97,6 +102,7 @@ class BillSheetClass {
      */
     const D_SHEET_ID = '13P0_OQ_-AjOM2q2zNKsgCAzWuOkNRYw8Z9LV8m8qXcc'
 
+    this.sheet = sheet || null
     this.sheetId = sheetId || ''
     this.sheetName = sheetName || ''
     this.path = path || {}
@@ -110,7 +116,7 @@ class BillSheetClass {
     this.transform = {}
 
     // If no specific sheetId, use default sheet id
-    if (!this.sheetId) {
+    if (!this.sheet && !this.sheetId) {
       console.warn('sheetId is empty, using default sheet id: D_SHEET_ID\nThis is deprecated, please specify sheetId in the future.')
       this.sheetId = D_SHEET_ID
     }
@@ -225,10 +231,16 @@ class BillSheetClass {
   /**
    * Return sheet object
    * 
-   * @return {Spreadsheet.Sheet|null}
+   * @return {SpreadsheetApp.Sheet|null}
    */
   _sheet() {
-    const { sheetId, sheetName } = this
+    const { sheet, sheetId, sheetName } = this
+    if (sheet) {
+      if (typeof sheet.getLastRow === 'function'){
+        if (sheet.getLastRow() > -1)
+          return sheet
+      }
+    }
     if (sheetId && sheetName)
       return SpreadsheetApp.openById(sheetId).getSheetByName(sheetName)
     else {
@@ -239,7 +251,7 @@ class BillSheetClass {
 
   /**
    * Return data range
-   * @param {Spreadsheet.Sheet|undefined} sheet
+   * @param {SpreadsheetApp.Sheet|undefined} sheet
    * @returns {SpreadsheetApp.Range|null}
    */
   _dataRange(sheet) {
