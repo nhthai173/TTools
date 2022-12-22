@@ -290,3 +290,20 @@ function isValidArray(arr = []) {
   }
   return false
 }
+
+
+
+
+
+/**
+ * Convert from Data URL to Blob
+ * @param {string} url url to convert
+ * @param {string} name Blob name
+ * @return {null|Blob}
+ */
+function dataURLToBlob(url = '', name = '') {
+  if (!url) return null
+  const type = (url.split(";")[ 0 ]).replace('data:', '')
+  const content = Utilities.base64Decode(url.split(",")[ 1 ])
+  return Utilities.newBlob(content, type, name || Utilities.getUuid())
+}

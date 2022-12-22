@@ -39,6 +39,7 @@ function toRawText(str = '', {
   removeSpace = true,
   lowerCase = true
 } = {}) {
+  if (isEmptyVariable(str)) return ''
   str = str.replace(/à|á|ạ|ả|ã|â|ầ|ấ|ậ|ẩ|ẫ|ă|ằ|ắ|ặ|ẳ|ẵ/g, "a");
   str = str.replace(/è|é|ẹ|ẻ|ẽ|ê|ề|ế|ệ|ể|ễ/g, "e");
   str = str.replace(/ì|í|ị|ỉ|ĩ/g, "i");
@@ -211,4 +212,32 @@ function parseCurrency(str = '', thousandSeparator = '.', decimalSeparator = ','
     }
   }
   return num
+}
+
+
+
+
+
+/**
+ * Split string by a pair of separator
+ * @param {string} str string to split
+ * @param {string} start start separator
+ * @param {string} end end separator
+ * @returns {string[]}
+ */
+function splitBySepPair(str = '', start = '', end = '') {
+  if (!start || !end) return str
+  let result = []
+  let temp = ''
+  let cnt = 0
+  for (let i = 0; i < str.length; i++) {
+    if (str[ i ] === start) cnt++
+    if (cnt > 0) temp += str[ i ]
+    if (str[ i ] === end) cnt--
+    if (cnt === 0 && temp) {
+      result.push(temp)
+      temp = ''
+    }
+  }
+  return result
 }
