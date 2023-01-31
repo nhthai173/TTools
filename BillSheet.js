@@ -75,7 +75,7 @@ class BillSheetClass {
     * @param {string} [options.sortType] sortProp type, "number" | "string"
     * @param {string|string[]} [options.emptyPropList] List of property name. If these properties of row are empty, the row will be removed
     * @param {string|string[]} [options.uniquePropList] List of property name. If there is more than one row with the same value of these properties, only the first row is kept, the rest will be removed.
-    * @param {{}} [options.transform] A table containing functions whose input is the value of property of the same name and the output is saved to sheet. These functions will be executed before the data is saved to the sheet and before the beforeAppend function is executed.
+    * @param {{}} [options.transform] This is the object containing the functions. These functions will transform the value of the property in rowData referenced by key. This step is performed when passing new data to the sheet, such as update(), append() and it is always executed first, before subsequent processing steps and before `beforeAppend`.
     * @param {beforeAppendCB} [options.beforeAppend] A function that is called with the data of each row (as Object), before appending data to sheet.
     * @param {afterGetCB} [options.afterGet] A function that is called with the data of each row (as Object), after getting data from sheet. 
     * @param {Function} [options.fCustom] DEPRECATED
@@ -229,7 +229,7 @@ class BillSheetClass {
           }
         }
 
-      } else if (isValidObject(header)) {
+      } else if (isValidObject(this.header)) {
         this.path = this.header
       }
     }
@@ -283,7 +283,7 @@ class BillSheetClass {
       if (!this.startColumn) this.startColumn = 1
     }
     if (!this.startRow || !this.startColumn) return null
-    if (sheet.getLastRow() <= this.startRow || sheet.getLastColumn() <= this.startColumn) return null
+    if (sheet.getLastRow() < this.startRow || sheet.getLastColumn() < this.startColumn) return null
     return sheet.getRange(this.startRow, this.startColumn, sheet.getLastRow() - this.startRow + 1, sheet.getLastColumn() - this.startColumn + 1)
   }
 
@@ -297,7 +297,6 @@ class BillSheetClass {
     if (!column || !this.path[ column ]) return null
     if (!sheet) sheet = this._sheet()
     if (!sheet) return null
-    if (!this.startRow) return null
     if (!this._dataRange(sheet)) return null
     return new SheetRange(
       sheet.getRange(this.startRow, this.path[ column ] + 1, sheet.getLastRow() - this.startRow + 1, 1),
@@ -316,10 +315,10 @@ class BillSheetClass {
     if (!isValidArray(columns)) return null
     if (!sheet) sheet = this._sheet()
     if (!sheet) return null
-    if (!this.startRow) return null
     if (!this._dataRange(sheet)) return null
+
     let colIndex = columns
-      .map(col => this.path[ col ] || -1)
+      .map(col => this.path[ col ] > -1 ? this.path[ col ] : -1)
       .filter(i => i > -1)
     if (!colIndex || !colIndex.length) return null
     colIndex.sort((a, b) => a - b)
@@ -351,6 +350,13 @@ class BillSheetClass {
           gTemp.push(colIndex[ i ])
           continue
         }
+        if (i == colIndex.length - 1) {
+          if (gTemp[ gTemp.length - 1 ] != colIndex[ i ]) {
+            gTemp.push(colIndex[ i ])
+          }
+          gColIndex.push(gTemp)
+          break
+        }
         if (colIndex[ i ] - colIndex[ i - 1 ] == 1) {
           gTemp.push(colIndex[ i ])
         } else {
@@ -360,34 +366,22 @@ class BillSheetClass {
       }
       for (const i in gColIndex) {
         const gi = gColIndex[ i ]
-        if (gi.length > 1) {
-          result.push(new SheetRange(
-            sheet.getRange(
-              this.startRow,
-              gi[ 0 ] + 1,
-              sheet.getLastRow() - this.startRow + 1,
-              gi.length
-            ),
-            gi
-          ))
-        } else {
-          result.push(new SheetRange(
-            sheet.getRange(
-              this.startRow,
-              gi[ 0 ] + 1,
-              sheet.getLastRow() - this.startRow + 1,
-              1
-            ),
-            gi
-          ))
-        }
+        result.push(new SheetRange(
+          sheet.getRange(
+            this.startRow,
+            gi[ 0 ] + 1,
+            sheet.getLastRow() - this.startRow + 1,
+            gi.length
+          ),
+          gi
+        ))
       }
     }
     return result
   }
 
   /**
-   * Get a row data as an object
+   * Convert a row data to an object
    * 
    * @param {[]} rowData
    * @param {Object} [options]
@@ -414,25 +408,31 @@ class BillSheetClass {
     return output
   }
 
+
+  _toRowData(data = {}, { }) {
+
+  }
+
+
   /**
    * Transform row data by `transform` option
    * 
    * @param {{}} data rowData
-   * @param {Boolean} [ignoreEmpty=false] Pass true to get transformed all properties (in `transform` option) even if the value is empty. Otherwise only transform non-empty properties in `rowData`.
+   * @param {Boolean} [isTransformAll=false] Pass true to get transformed all properties (in `transform` option) even those properties are not in `data`. Otherwise only transform properties in `data`.
    * @returns {{}} transformed data
    */
-  _transformData(data = {}, ignoreEmpty = false) {
+  _transformData(data = {}, isTransformAll = false) {
     const { transform } = this
-    if (!ignoreEmpty && !isValidObject(data)) return {}
+    if (!isValidObject(data)) return {}
     function __transform(prop = '') {
       if (transform[ prop ]) {
         try {
-          let tData = transform[ prop ](data[ prop ])
+          let tData = transform[ prop ](Object.create(data[ prop ]))
           if (tData !== undefined) data[ prop ] = tData
         } catch (e) { console.error(`Error at transfrom "${prop}"`, e) }
       }
     }
-    if (!ignoreEmpty) {
+    if (isTransformAll) {
       for (const i in data) __transform(i)
     } else if (transform) {
       for (const i in transform) __transform(i)
@@ -448,10 +448,10 @@ class BillSheetClass {
    * @returns {{}} transformed data
    */
   _transformAppend(data = {}, ignoreEmpty = false) {
-    if (!ignoreEmpty && !isValidObject(data)) return {}
+    if (ignoreEmpty && !isValidObject(data)) return {}
     if (this.beforeAppend) {
       try {
-        let tData = this.beforeAppend(data)
+        let tData = this.beforeAppend(Object.create(data))
         if (isValidObject(tData)) data = tData
       } catch (e) { console.error(`Error at beforeAppend`, e) }
     }
@@ -466,10 +466,10 @@ class BillSheetClass {
    * @returns {{}} transformed data
    */
   _transformGet(data = {}, ignoreEmpty = false) {
-    if (!ignoreEmpty && !isValidObject(data)) return {}
+    if (ignoreEmpty && !isValidObject(data)) return {}
     if (this.afterGet) {
       try {
-        let tData = this.afterGet(data)
+        let tData = this.afterGet(Object.create(data))
         if (isValidObject(tData)) data = tData
       } catch (e) { console.error(`Error at afterGet`, e) }
     }
@@ -615,13 +615,17 @@ class BillSheetClass {
    * @param {[]} [options.map=[]] Properties list. If provided, only compare and update these properties. If not provided, compare and update all properties in `data`.
    * @param {beforeAppendCB} [options.beforeAppend] Callback function to transform data before append. If provided, it will be ignored default `beforeAppend`. If this function returns non-valid Object, It will be continued with the old data. Only called if `appendIfNotFound` is true.
    * @param {beforeChangeCB} [options.beforeChange] Callback function to transform data before change. It will be called before default `beforeAppend` option. If this function returns non-valid Object, It will be continued with the old data.
-   * @param {Boolean} [options.ignoreTransformOnChange] Pass true to ignore default `beforeAppend` option when update.
+   * @param {Boolean} [options.ignoreTransform] Pass true to ignore `transform` option.
+   * @param {Boolean} [options.ignoreGetTransform] Pass true to ignore `afterGet` option when get data from sheet.
+   * @param {Boolean} [options.ignoreSetTransform] Pass true to ignore `beforeAppend` option when update.
    * @return {Boolean} Return true if success update or append
    */
   update(data, idProps = [], {
     appendIfNotFound = true,
     onlyUpdateOnChange = false,
-    ignoreTransformOnChange = false,
+    ignoreTransform = false,
+    ignoreGetTransform = false,
+    ignoreSetTransform = false,
     map = [],
     beforeAppend,
     beforeChange
@@ -663,47 +667,43 @@ class BillSheetClass {
 
     for (let sData of newData) {
       if (isValidObject(sData)) {
-        sData = this._transformData(sData)
+        if (!ignoreTransform) {
+          sData = this._transformData(sData)
+        }
         let found = false
 
         // Find in sheetData
         if (isValidArray(sheetData) && isIdPropsValid) {
           for (const i in sheetData) {
-            let matchCnt = 0
-            for (const idProp of idProps) {
-              if (!isEmptyVariable(sData[ idProp ])) {
-                const idindex = path[ idProp ]
-                if (idindex >= 0 && smartCompare(sheetData[ i ][ idindex ], sData[ idProp ])) {
-                  matchCnt++
+            const rData = this._toJSON(sheetData[ i ], { ignoreGetTransform })
+            found = compareObject(sData, rData, idProps, {
+              ignoreType: true,
+              ignoreEmptyContent: true
+            })
+            if (!found) continue
+            if (!onlyUpdateOnChange || !compareObject(sData, rData, map)) {
+              if (isBeforeChangeAvailable) {
+                let cbData = beforeChange(rData, sData)
+                if (isValidObject(cbData)) sData = cbData
+              }
+              if (!ignoreSetTransform) {
+                sData = this._transformAppend(sData)
+              }
+              function __updateRow(key) {
+                const id = path[ key ]
+                if (id >= 0) {
+                  anyRowToUpdate = true
+                  if (isEmptyVariable(sData[ key ])) sData[ key ] = ''
+                  sheetData[ i ][ id ] = sData[ key ]
                 }
               }
-            }
-            if (matchCnt == idProps.length) {
-              found = true
-              const rData = this._toJSON(sheetData[ i ])
-              if (!onlyUpdateOnChange || !compareObject(sData, rData, map)) {
-                if (isBeforeChangeAvailable) {
-                  let cbData = beforeChange(rData, sData)
-                  if (isValidObject(cbData)) sData = cbData
-                }
-                if (!ignoreTransformOnChange) {
-                  sData = this._transformAppend(sData)
-                }
-                function __updateRow(key) {
-                  const id = path[ key ]
-                  if (id >= 0) {
-                    anyRowToUpdate = true
-                    if (isEmptyVariable(sData[ key ])) sData[ key ] = ''
-                    sheetData[ i ][ id ] = sData[ key ]
-                  }
-                }
-                if (isValidArray(map)) {
-                  for (const j in map) __updateRow(map[ j ])
-                } else {
-                  for (const j in sData) __updateRow(j)
-                }
+              if (isValidArray(map)) {
+                for (const j in map) __updateRow(map[ j ])
+              } else {
+                for (const j in sData) __updateRow(j)
               }
             }
+            break
           }
 
         }
@@ -724,7 +724,15 @@ class BillSheetClass {
         const ranges = this._columnRanges(map, ss)
         if (isValidArray(ranges)) {
           for (const i in ranges) {
-            if (ranges[ i ]) ranges[ i ].setValuesFromData(sheetData)
+            console.log(
+              'Update on Range:',
+              JSON.stringify(
+                ranges[ i ].dataPath.map(d => {
+                  for (const i in path) { if (path[ i ] == d) return i }
+                })))
+            if (ranges[ i ]) {
+              ranges[ i ].setValuesFromData(sheetData)
+            }
           }
         }
       } else {
@@ -752,7 +760,13 @@ class BillSheetClass {
    * @param {queryCallback} callback Return new data to update. If return undefined, it will be ignored.
    * @returns {boolean} true if success update
    */
-  queryUpdate(query, callback) {
+  queryUpdate(query, callback, {
+    map = [],
+    except = [],
+    onlyUpdateOnChange = false,
+    ignoreGetTransform = false,
+    ignoreSetTransform = false
+  } = {}) {
     if (isValidObject(query)) query = [ query ]
     if (!isValidArray(query)) return false
     if (!isValidObject(query[ 0 ])) return false
@@ -766,18 +780,31 @@ class BillSheetClass {
     const sheetRange = this._dataRange(ss)
     if (!sheetRange) return false
     let sheetData = sheetRange.getValues()
-    
+
+    if (except.length) {
+      if (map.length) {
+        map = map.filter(d => !except.includes(d))
+      } else {
+        map = Object.keys(path).filter(d => !except.includes(d))
+      }
+    }
+
     for (const i in sheetData) {
-      const rData = this._toJSON(sheetData[ i ])
+      const rData = this._toJSON(sheetData[ i ], { ignoreGetTransform })
       if (this._matchObject(query, rData)) {
         let newData = undefined
         try {
-          const cbData = callback(rData)
+          const cbData = callback(Object.create(rData))
           if (isValidObject(cbData)) newData = cbData
         } catch (e) {
           console.error(e)
         }
-        if (isValidObject(newData)) {
+        if (!isValidObject(newData)) continue
+
+        if (!onlyUpdateOnChange || !compareObject(newData, rData, map)) {
+          if (!ignoreSetTransform) {
+            newData = this._transformAppend(newData)
+          }
           function __updateRow(key) {
             const id = path[ key ]
             if (id >= 0) {
@@ -785,14 +812,33 @@ class BillSheetClass {
               sheetData[ i ][ id ] = newData[ key ]
             }
           }
-          for (const j in newData) __updateRow(j)
+          if (isValidArray(map)) {
+            for (const j in map) __updateRow(map[ j ])
+          } else {
+            for (const j in newData) __updateRow(j)
+          }
           anyChange = true
         }
       }
     }
 
     if (anyChange) {
-      sheetRange.setValues(sheetData)
+      if (isValidArray(map)) {
+        const ranges = this._columnRanges(map, ss)
+        if (isValidArray(ranges)) {
+          for (const i in ranges) {
+            console.log(
+              'Update on Range:',
+              JSON.stringify(
+                ranges[ i ].dataPath.map(d => {
+                  for (const i in path) { if (path[ i ] == d) return i }
+                })))
+            if (ranges[ i ]) ranges[ i ].setValuesFromData(sheetData)
+          }
+        }
+      } else {
+        sheetRange.setValues(sheetData)
+      }
       this.prettify()
       return true
     }
@@ -817,7 +863,7 @@ class BillSheetClass {
     return this.update(data, idProps, {
       appendIfNotFound: false,
       onlyUpdateOnChange: true,
-      ignoreTransformOnChange: true,
+      ignoreSetTransform: true,
       beforeChange: (oldData, newData) => {
         for (const i in oldData) oldData[ i ] = ''
         return oldData
@@ -830,13 +876,20 @@ class BillSheetClass {
    * Remove existing row(s)
    * 
    * @param {{}|{}[]} query Pairs of property and value to determine which rows to remove.
+   * @param {string[]|string} except List of properties to exclude from remove.
    * @return {Boolean} Return true if success remove
    */
-  queryRemove(query = []) {
-    return this.update(query, (oldData) => {
-      for (const i in oldData) oldData[ i ] = ''
-      return oldData
-    })
+  queryRemove(query = [], { map = [], except = [] } = {}) {
+    if (isEmptyVariable(except)) except = []
+    if (typeof except === 'string') except = [ except ]
+    return this.queryUpdate(
+      query,
+      (oldData) => {
+        for (const i in oldData)
+          oldData[ i ] = ''
+        return oldData
+      },
+      { map, except })
   }
 
 
@@ -1058,8 +1111,10 @@ class BillSheetClass {
 
     // check all prop provided
     for (const i in path) {
-      if (sortProp == i)
+      if (sortProp == i) {
         props.sortProp = path[ i ]
+        break
+      }
     }
     for (const i in emptyPropList) {
       for (const j in path) {
@@ -1225,7 +1280,7 @@ class SheetRange {
   }
 
   /**
-   * Set values to range from sheet data
+   * Set values to range from sheet data (2-dim array)
    * @param {[][]} data 
    */
   setValuesFromData(data) {
@@ -1240,6 +1295,20 @@ class SheetRange {
       values.push(row)
     }
     this.range.setValues(values)
+  }
+
+  setFormulasR1C1FromData(data) {
+    const formulas = []
+    for (const i in data) {
+      const row = []
+      for (const j in this.dataPath) {
+        let cell = data[ i ][ this.dataPath[ j ] ]
+        if (isEmptyVariable(cell)) cell = ''
+        row.push(cell)
+      }
+      formulas.push(row)
+    }
+    this.range.setFormulasR1C1(formulas)
   }
 
   /**
