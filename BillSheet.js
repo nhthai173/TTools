@@ -402,7 +402,8 @@ class BillSheetClass {
       return null
     }
     for (const prop in path) {
-      output[ prop ] = rowData[ path[ prop ] ] || ''
+      if (isEmptyVariable(rowData[ path[ prop ] ])) output[ prop ] = ''
+      else output[ prop ] = rowData[ path[ prop ] ]
     }
     if (!ignoreGetTransform) output = this._transformGet(output)
     return output
@@ -427,7 +428,7 @@ class BillSheetClass {
     function __transform(prop = '') {
       if (transform[ prop ]) {
         try {
-          let tData = transform[ prop ](Object.create(data[ prop ]))
+          let tData = transform[ prop ](data[ prop ]) // Object.create(data[ prop ])
           if (tData !== undefined) data[ prop ] = tData
         } catch (e) { console.error(`Error at transfrom "${prop}"`, e) }
       }
@@ -451,7 +452,7 @@ class BillSheetClass {
     if (ignoreEmpty && !isValidObject(data)) return {}
     if (this.beforeAppend) {
       try {
-        let tData = this.beforeAppend(Object.create(data))
+        let tData = this.beforeAppend(data) // Object.create(data)
         if (isValidObject(tData)) data = tData
       } catch (e) { console.error(`Error at beforeAppend`, e) }
     }
@@ -469,7 +470,7 @@ class BillSheetClass {
     if (ignoreEmpty && !isValidObject(data)) return {}
     if (this.afterGet) {
       try {
-        let tData = this.afterGet(Object.create(data))
+        let tData = this.afterGet(data) // Object.create(data)
         if (isValidObject(tData)) data = tData
       } catch (e) { console.error(`Error at afterGet`, e) }
     }
@@ -794,7 +795,7 @@ class BillSheetClass {
       if (this._matchObject(query, rData)) {
         let newData = undefined
         try {
-          const cbData = callback(Object.create(rData))
+          const cbData = callback(rData) // Object.create(rData)
           if (isValidObject(cbData)) newData = cbData
         } catch (e) {
           console.error(e)
