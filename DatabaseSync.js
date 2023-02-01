@@ -186,7 +186,7 @@ class DatabaseSyncClass {
    * @return {{type: string, sheet: number, notion: number}[]} Changes
    */
   compare(sheet = [], notion = [], idProp = [], sProps = [], nProps = []) {
-    if(!isValidArray(idProp)){
+    if (!isValidArray(idProp)) {
       console.error('idProp can not empty')
       return []
     }
@@ -337,9 +337,25 @@ class DatabaseSyncClass {
 
   /**
    * Sync Sheet data with Notion data
+   * @param {Object} options
+   * @param {function} options.onPageAdded Callback when a page is added
+   * @param {function} options.onPageUpdated Callback when a page is updated
+   * @param {function} options.onPageDeleted Callback when a page is deleted
+   * @param {function} options.onPagePulled Callback when a page is pulled
    * @returns {{}[]} Notion database data
    */
-  sync() {
+  sync({
+    onPageAdded,
+    onPageUpdated,
+    onPageDeleted,
+    onPagePulled
+  } = {}) {
+
+    if (typeof onPageAdded !== 'function') onPageAdded = null
+    if (typeof onPageUpdated !== 'function') onPageUpdated = null
+    if (typeof onPageDeleted !== 'function') onPageDeleted = null
+    if (typeof onPagePulled !== 'function') onPagePulled = null
+
     // contains compare result
     const compareResult = {
       diffCnt: 0, notExcCnt: 0
@@ -372,20 +388,30 @@ class DatabaseSyncClass {
           compareResult.diffCnt += 1
           if (diff.type == 'ADD' && useAdd) {
             console.info('ADD => ', sheetData[ diff.sheet ])
-            this.createDatabaseItems(sheetData[ diff.sheet ], databaseId)
+            const page = this.createDatabaseItems(sheetData[ diff.sheet ], databaseId)
+            try { onPageAdded(new NotionPage({ page, token: notionToken })) }
+            catch (e) { this.dbg('error', 'Error at onPageAdded', e) }
           } else if (diff.type == 'DELETE' && useDelete) {
             console.info('DELETE => ', notionData[ diff.notion ].page_info.page_id)
-            this.deleteDatabaseItems(notionData[ diff.notion ].page_info.page_id)
+            const page = this.deleteDatabaseItems(notionData[ diff.notion ].page_info.page_id)
+            try { onPageDeleted(new NotionPage({ page, token: notionToken })) }
+            catch (e) { this.dbg('error', 'Error at onPageDeleted', e) }
           } else if (diff.type == 'PUSH' && usePush) {
             console.info('PUSH => ', sheetData[ diff.sheet ])
             console.info('===>', notionData[ diff.notion ])
-            this.updateDatabaseItems(sheetData[ diff.sheet ], notionData[ diff.notion ].page_info.page_id)
+            const page = this.updateDatabaseItems(sheetData[ diff.sheet ], notionData[ diff.notion ].page_info.page_id)
+            try { onPageUpdated(new NotionPage({ page, token: notionToken })) }
+            catch (e) { this.dbg('error', 'Error at onPageUpdated', e) }
           } else if (diff.type == 'PULL' && usePull) {
             console.info('PULL => ', notionData[ diff.notion ])
-            this.pullDataToSheet(notionData[ diff.notion ])
+            const page = this.pullDataToSheet(notionData[ diff.notion ])
+            try { onPagePulled(new NotionPage({ page, token: notionToken })) }
+            catch (e) { this.dbg('error', 'Error at onPagePulled', e) }
           } else if (diff.type == 'PULL_NEW' && usePullNew) {
             console.info('PULL_NEW => ', notionData[ diff.notion ])
             this.pullDataToSheet(notionData[ diff.notion ])
+            try { onPagePulled(notionData[ diff.notion ]) }
+            catch (e) { this.dbg('error', 'Error at onPagePulled', e) }
           } else {
             compareResult.notExcCnt += 1
             this.dbg('log', 'Not Exec =>', {
@@ -414,7 +440,7 @@ class DatabaseSyncClass {
    * Update Notion page(s)
    * @param {{}|{}[]} data data to update
    * @param {string} pageId Notion page id
-   * @return {boolean} true if success
+   * @return {{}} true if success
    */
   updateDatabaseItems(data = {}, pageId = '') {
     if (data) {
@@ -435,19 +461,18 @@ class DatabaseSyncClass {
             payload = fcall.payload || payload
           }
         }
-        new NotionAPI({ token: this.notionToken }).updatePage(pageId, payload)
+        return new NotionAPI({ token: this.notionToken }).updatePage(pageId, payload)
       }
-      return true
     }
     console.error('Can not update Notion page without page id')
-    return false
+    return {}
   }
 
   /**
    * Create Notion page(s)
    * @param {{}|{}[]} data data of new page(s)
    * @param {string} databaseId Notion database id
-   * @return {boolean} true if success
+   * @return {{}} true if success
    */
   createDatabaseItems(data = {}, databaseId = '') {
     if (databaseId && isValidObject(data)) {
@@ -478,29 +503,27 @@ class DatabaseSyncClass {
             payload = fcall.payload || payload
           }
         }
-        new NotionAPI({ token: this.notionToken }).createPage({
+        return new NotionAPI({ token: this.notionToken }).createPage({
           "parent": { "database_id": databaseId },
           ...payload
         })
       }
-      return true
     }
     console.error('Can not create a Notion page without database id')
-    return false
+    return {}
   }
 
   /**
    * Delete Notion page(s)
    * @param {string} pageId Notion page id to delete
-   * @return {boolean} true if success
+   * @return {{}} true if success
    */
   deleteDatabaseItems(pageId = '') {
     if (pageId) {
-      new NotionAPI({ token: this.notionToken }).deletePage(pageId)
-      return true
+      return new NotionAPI({ token: this.notionToken }).deletePage(pageId)
     }
     console.error('Can not delete Notion page without page id')
-    return false
+    return {}
   }
 
   /**
