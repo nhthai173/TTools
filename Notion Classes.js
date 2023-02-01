@@ -1051,7 +1051,7 @@ class NotionPropertyUpdater {
       })
     }
     if (!options.length) return
-    this.data.properties[ pid ] = { 
+    this.data.properties[ pid ] = {
       [ pType ]: {
         options
       }
@@ -1667,7 +1667,7 @@ class NotionProperty {
     return null
   }
   getMultiSelectValue(data = []) {
-    if (data.length) {
+    if (data?.length) {
       return data.map(d => d.name)
     }
     return null
@@ -1709,7 +1709,7 @@ class NotionProperty {
         case 'rollup':
           return this.getRollupValue(data.rollup)
         case 'select':
-          return data.select.name
+          return data.select?.name
         case 'multi_select':
           return this.getMultiSelectValue(data.multi_select)
         case 'title':
