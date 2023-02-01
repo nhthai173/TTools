@@ -1695,7 +1695,7 @@ class NotionProperty {
   _getValue(data) {
     if (data && Object.keys(data).length && data.type) {
       switch (data.type) {
-        case 'string': case 'number': case 'checkbox':
+        case 'string': case 'url': case 'number': case 'checkbox':
           return data[ data.type ]
         case 'rich_text':
           return this.getRichtextValue(data.rich_text)
