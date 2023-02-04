@@ -94,10 +94,7 @@ function smartCompare(a, b, {
   let output = false
   try {
     // Date Object
-    if (a && b &&
-      a.getTime && b.getTime &&
-      typeof a.getTime === 'function' &&
-      typeof b.getTime === 'function') {
+    if (a instanceof Date && b instanceof Date) {
       return a.getTime() === b.getTime()
     }
 
@@ -158,10 +155,10 @@ function smartCompare(a, b, {
       }
       if (allowEmpty && output) {
         for (const i in b) {
-          if (a[ i ] === undefined && isEmptyVariable(b[ i ])) {
-            continue
+          if (a[ i ] === undefined) {
+            if (isEmptyVariable(b[ i ])) continue
+            return false
           }
-          return false
         }
       }
       return output
