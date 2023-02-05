@@ -177,6 +177,47 @@ class DatabaseSyncClass {
   }
 
   /**
+   * Comapre two properties
+   * @param {any} a First property value
+   * @param {any} b Second property value
+   * @param {string} type Property type
+   * @returns {boolean} true if equal
+   */
+  propCompare(a, b, type) {
+    switch (type) {
+      case NOTION_DATA_TYPE.date:
+        return compareDate(a, b, { second: false, millisecond: false })
+      case NOTION_DATA_TYPE.number:
+        a = Number(a)
+        b = Number(b)
+        return (isNaN(a) && isNaN(b)) || (a == b)
+      default:
+        return smartCompare(a, b)
+    }
+  }
+
+  /**
+   * Compare Sheet row with Notion page
+   * @param {{}} a Sheet row
+   * @param {*} b Notion page
+   * @param {*} props Properties to compare
+   * @returns {boolean} true if equal
+   */
+  pageCompare(a, b, props) {
+    let result = true
+    if (!isValidObject(a) || !isValidObject(b)) return false
+    if (!isValidArray(props)) {
+      console.error('props can not empty')
+      return false
+    }
+    for (const p of props) {
+      result = result && this.propCompare(a[ p.name ], b[ p.name ], p.type)
+      if (!result) break
+    }
+    return result
+  }
+
+  /**
    * Compare Sheet data with Notion data
    * @param {{}[]} sheet Sheet data
    * @param {{}[]} notion Notion data
@@ -195,73 +236,41 @@ class DatabaseSyncClass {
     if (sheet && notion) {
 
       for (const i in sheet) {
-        let macthId = 0
         let subRes = {}
 
         // Check unempty item in Sheet by idProp
-        for (const idp of idProp) {
-          if (!isEmptyVariable(sheet[ i ][ idp ])) {
-            macthId++
-          }
-        }
-
-        // If not valid item, skip to next item
-        if (macthId != idProp.length) {
+        if (!idProp.every(id => !isEmptyVariable(sheet[ i ][ id ]))) {
           continue
         }
 
         // If valid, find item in Notion and compare
         for (const j in notion) {
-          let match = 0
-          for (const idp of idProp) {
-            if (smartCompare(sheet[ i ][ idp ], notion[ j ][ idp ])) {
-              match++
-            }
-          }
-          if (match == idProp.length) {
+
+          if (idProp.every(id => smartCompare(sheet[ i ][ id ], notion[ j ][ id ]))) {
+
             readList.push(j)
             let anyPushChange = false
             let anyPullChange = false
 
             if (sProps && sProps.length) {
-              const sPropsMap = sProps.map(p => p.name)
-              if (!compareObject(sheet[ i ], notion[ j ], sPropsMap)) {
+              if (!this.pageCompare(sheet[ i ], notion[ j ], sProps)) {
                 anyPushChange = true
               }
-              // for (const k in sProps) {
-              //   const spk = sProps[ k ][ 'name' ]
-              //   if (!isEmptyVariable(sheet[ i ][ spk ])) {
-              //     if (!isEmptyVariable(notion[ j ][ spk ])) {
-              //       if (!smartCompare(sheet[ i ][ spk ], notion[ j ][ spk ])) {
-              //         anyPushChange = true
-              //         break
-              //       }
-              //     } else {
-              //       anyPushChange = true
-              //       break
-              //     }
-              //   }
+
+              // const sPropsMap = sProps.map(p => p.name)
+              // if (!compareObject(sheet[ i ], notion[ j ], sPropsMap)) {
+              //   anyPushChange = true
               // }
             }
 
             if (nProps && nProps.length) {
-              const nPropsMap = nProps.map(p => p.name)
-              if (!compareObject(sheet[ i ], notion[ j ], nPropsMap)) {
+              if (!this.pageCompare(sheet[ i ], notion[ j ], nProps)) {
                 anyPullChange = true
               }
-              // for (const k in nProps) {
-              //   const npk = nProps[ k ][ 'name' ]
-              //   if (!smartCompare(notion[ j ][ npk ], null)) {
-              //     if (!smartCompare(sheet[ i ][ npk ], null)) {
-              //       if (!smartCompare(sheet[ i ][ npk ], notion[ j ][ npk ])) {
-              //         anyPullChange = true
-              //         break
-              //       }
-              //     } else {
-              //       anyPullChange = true
-              //       break
-              //     }
-              //   }
+
+              // const nPropsMap = nProps.map(p => p.name)
+              // if (!compareObject(sheet[ i ], notion[ j ], nPropsMap)) {
+              //   anyPullChange = true
               // }
             }
 
