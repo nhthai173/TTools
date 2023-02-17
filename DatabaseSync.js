@@ -5,6 +5,7 @@
  * @param {BillSheetClass} [options.sheet] BillSheet
  * @param {any[]} [options.data=[]] Sheet data. If not provided and `sheet` is provided, will get data from `sheet`
  * @param {string} options.databaseId Notion database ID
+ * @param {{}} [options.databaseFilter] Notion database filter. To reduce the number of pages to be pulled/pushed
  * @param {NotionSyncProperty[]} [options.sProps=[]] Sheet properties to sync to Notion. The value of each property in sheet will be synced to the corresponding property in Notion (Sheet -> Notion). Example: [{name: 'Time', type: NOTION_DATA_TYPE.date}]
  * @param {NotionSyncProperty[]} [options.nProps=[]] Notion properties to sync to Sheet. The value of each property in Notion will be synced to the corresponding property in Sheet (Notion -> Sheet). Example: [{name: 'Time', type: NOTION_DATA_TYPE.date}]
  * @param {string|string[]} options.idProp Identifier properties. The value of these properties will be used to identify the row in Notion and Sheet
@@ -30,6 +31,7 @@ function DatabaseSync({
   sheet = {},
   data = [],
   databaseId = '',
+  databaseFilter = {},
   sProps = [],
   nProps = [],
   idProp = [],
@@ -50,6 +52,7 @@ function DatabaseSync({
     nProps,
     idProp,
     databaseId,
+    databaseFilter,
     useDelete,
     useAdd,
     usePull,
@@ -72,6 +75,7 @@ class DatabaseSyncClass {
    * @param {BillSheetClass} [options.sheet] BillSheet
    * @param {any[]} [options.data=[]] Sheet data. If not provided and `sheet` is provided, will get data from `sheet`
    * @param {string} options.databaseId Notion database ID
+   * @param {{}} [options.databaseFilter] Notion database filter. To reduce the number of pages to be pulled/pushed
    * @param {NotionSyncProperty|NotionSyncProperty[]} [options.sProps=[]] Sheet properties to sync to Notion. The value of each property in sheet will be synced to the corresponding property in Notion (Sheet -> Notion). Example: [{name: 'Time', type: NOTION_DATA_TYPE.date}]
    * @param {NotionSyncProperty|NotionSyncProperty[]} [options.nProps=[]] Notion properties to sync to Sheet. The value of each property in Notion will be synced to the corresponding property in Sheet (Notion -> Sheet). Example: [{name: 'Time', type: NOTION_DATA_TYPE.date}]
    * @param {string|string[]} options.idProp Identifier properties. The value of these properties will be used to identify the row in Notion and Sheet
@@ -96,6 +100,7 @@ class DatabaseSyncClass {
     sheet = {},
     data = [],
     databaseId = '',
+    databaseFilter = {},
     sProps = [],
     nProps = [],
     idProp = [],
@@ -110,6 +115,7 @@ class DatabaseSyncClass {
   } = {}) {
     this.notionToken = notionToken || ''
     this.databaseId = databaseId || ''
+    this.databaseFilter = databaseFilter || {}
     this.sheet = null
     this.data = data
     this.sProps = sProps
@@ -153,6 +159,13 @@ class DatabaseSyncClass {
     }
     if (!isValidArray(this.idProp)) {
       this.idProp = []
+    }
+    if (isValidObject(this.databaseFilter)) {
+      if (this.databaseFilter.filter == undefined) {
+        this.databaseFilter = { filter: this.databaseFilter }
+      }
+    } else {
+      this.databaseFilter = {}
     }
     if (fCustomPush && typeof fCustomPush === 'function') {
       this.fCustomPush = fCustomPush
@@ -239,14 +252,19 @@ class DatabaseSyncClass {
         let subRes = {}
 
         // Check unempty item in Sheet by idProp
-        if (!idProp.every(id => !isEmptyVariable(sheet[ i ][ id ]))) {
+        if (!idProp.some(id => !isEmptyVariable(sheet[ i ][ id ]))) {
           continue
         }
 
         // If valid, find item in Notion and compare
         for (const j in notion) {
 
-          if (idProp.every(id => smartCompare(sheet[ i ][ id ], notion[ j ][ id ]))) {
+          if (idProp.every(id => {
+            let propType = null
+            if (sProps && sProps.length) propType = sProps.find(p => p.name == id)?.type
+            if (!propType && nProps && nProps.length) propType = nProps.find(p => p.name == id)?.type
+            return this.propCompare(sheet[ i ][ id ], notion[ j ][ id ], propType)
+          })) {
 
             readList.push(j)
             let anyPushChange = false
@@ -369,13 +387,13 @@ class DatabaseSyncClass {
     const compareResult = {
       diffCnt: 0, notExcCnt: 0
     }
-    const { notionToken, data, sProps, nProps, databaseId, idProp, useDelete, useAdd, usePush, usePull, usePullNew } = this
+    const { notionToken, data, sProps, nProps, databaseId, databaseFilter, idProp, useDelete, useAdd, usePush, usePull, usePullNew } = this
     if (data && (sProps || nProps) && idProp && databaseId) {
       this.dbg('warn', 'Getting data from Notion...')
       let databaseData = new NotionDatabase({
         databaseId,
         token: notionToken
-      }).load()
+      }).load(databaseFilter)
       if (isValidArray(databaseData)) {
         // prepare data to compare
         let sheetData = data
