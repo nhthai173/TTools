@@ -453,6 +453,7 @@ class BillSheetClass {
     if (this.beforeAppend) {
       try {
         let tData = this.beforeAppend(data) // Object.create(data)
+        if (tData === null) return null
         if (isValidObject(tData)) data = tData
       } catch (e) { console.error(`Error at beforeAppend`, e) }
     }
@@ -464,13 +465,14 @@ class BillSheetClass {
    * 
    * @param {{}} data
    * @param {Boolean} [ignoreEmpty=false] If true, return `{}` if `rowData` is empty.
-   * @returns {{}} transformed data
+   * @returns {{}|null} transformed data
    */
   _transformGet(data = {}, ignoreEmpty = false) {
     if (ignoreEmpty && !isValidObject(data)) return {}
     if (this.afterGet) {
       try {
         let tData = this.afterGet(data) // Object.create(data)
+        if (tData === null)  return null
         if (isValidObject(tData)) data = tData
       } catch (e) { console.error(`Error at afterGet`, e) }
     }
