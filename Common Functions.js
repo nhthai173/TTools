@@ -286,6 +286,7 @@ function compareObject(a, b, map = [], {
  * @returns {boolean} true if it is Date Object
  */
 function isDate(d) {
+  if (!d) return false
   if (d instanceof Date) return true
   if (d.getTime && typeof d.getTime == 'function' && !isNaN(d.getTime())) {
     d = new Date(d.getTime())
