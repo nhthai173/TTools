@@ -75,6 +75,69 @@ function getRanNum(len = 6) {
   return num
 }
 
+/**
+ * Compare 2 dates
+ * @param {Date|string|number} a First date
+ * @param {Date|string|number} b Second date
+ * @param {Object} options
+ * @param {Boolean} [options.year=true] if true, it will compare year
+ * @param {Boolean} [options.month=true] if true, it will compare month
+ * @param {Boolean} [options.date=true] if true, it will compare date
+ * @param {Boolean} [options.hour=true] if true, it will compare hour
+ * @param {Boolean} [options.minute=true] if true, it will compare minute
+ * @param {Boolean} [options.second=true] if true, it will compare second
+ * @param {Boolean} [options.millisecond=true] if true, it will compare millisecond
+ * @returns {Boolean} true if equal
+ */
+function compareDate(a, b, {
+  year = true,
+  month = true,
+  date = true,
+  hour = true,
+  minute = true,
+  second = true,
+  millisecond = true
+} = {}) {
+  let result = false
+  try {
+    if (typeof a !== 'object') a = new Date(a)
+    if (typeof b !== 'object') b = new Date(b)
+    if (isDate(a) && isDate(b)) {
+      const d = new Date()
+      if (!year) {
+        a.setFullYear(2020)
+        b.setFullYear(2020)
+      }
+      if (!month) {
+        a.setMonth(0)
+        b.setMonth(0)
+      }
+      if (!date) {
+        a.setDate(1)
+        b.setDate(1)
+      }
+      if (!hour) {
+        a.setHours(0)
+        b.setHours(0)
+      }
+      if (!minute) {
+        a.setMinutes(0)
+        b.setMinutes(0)
+      }
+      if (!second) {
+        a.setSeconds(0)
+        b.setSeconds(0)
+      }
+      if (!millisecond) {
+        a.setMilliseconds(0)
+        b.setMilliseconds(0)
+      }
+      result = a.getTime() === b.getTime()
+    }
+  } catch (e) { }
+  return result
+}
+
 
 /**
  * Smart compare two values, support string, number, date. Return `true` if equal.
@@ -94,11 +157,8 @@ function smartCompare(a, b, {
   let output = false
   try {
     // Date Object
-    if (a && b &&
-      a.getTime && b.getTime &&
-      typeof a.getTime === 'function' &&
-      typeof b.getTime === 'function') {
-      return a.getTime() === b.getTime()
+    if (isDate(a) && isDate(b)) {
+      return compareDate(a, b)
     }
 
     // Special case
@@ -158,10 +218,10 @@ function smartCompare(a, b, {
       }
       if (allowEmpty && output) {
         for (const i in b) {
-          if (a[ i ] === undefined && isEmptyVariable(b[ i ])) {
-            continue
+          if (a[ i ] === undefined) {
+            if (isEmptyVariable(b[ i ])) continue
+            return false
           }
-          return false
         }
       }
       return output
@@ -218,6 +278,22 @@ function compareObject(a, b, map = [], {
   return output
 }
 
+
+
+/**
+ * Check if a variable is Date Object
+ * @param {any} d
+ * @returns {boolean} true if it is Date Object
+ */
+function isDate(d) {
+  if (!d) return false
+  if (d instanceof Date) return true
+  if (d.getTime && typeof d.getTime == 'function' && !isNaN(d.getTime())) {
+    d = new Date(d.getTime())
+    return true
+  }
+  return false
+}
 
 
 

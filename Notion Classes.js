@@ -78,6 +78,9 @@ function NOTION() {
     },
     NotionProperty: function (data = {}, { pageId = '', token = '' } = {}) {
       return new NotionProperty(data, { pageId, token })
+    },
+    NotionPropertyUpdater: function ({ token, databaseId } = {}) {
+      return new NotionPropertyUpdater({ token, databaseId })
     }
   }
 }
@@ -959,6 +962,130 @@ class NotionPropertyMaker {
 
 
 
+/**
+ * Update Notion Database properties
+ * @class
+ */
+class NotionPropertyUpdater {
+  /**
+   * @param {Object} options
+   * @param {string} options.token Notion private token
+   * @param {string} options.databaseId Notion database id
+   */
+  constructor({ token, databaseId } = {}) {
+    this.token = token || ''
+    this.databaseId = databaseId || ''
+    this.data = { properties: {} }
+  }
+
+  /**
+   * Apply changes
+   */
+  apply() {
+    if (!this.token || !this.databaseId) return console.error('[NotionPropertyUpdater] Missing token or databaseId')
+    if (!isValidObject(this.data.properties)) return console.error('[NotionPropertyUpdater] Missing properties')
+    return new NotionAPI({ token: this.token }).updateDatabase(this.databaseId, this.data)
+  }
+
+  /**
+   * Remove a property
+   * @param {string|NotionProperty} id id or name of property to remove
+   * @returns {void}
+   */
+  remove(id) {
+    if (id instanceof NotionProperty) id = id.data.id || ''
+    if (isEmptyVariable(id)) return
+    this.data.properties[ id ] = null
+  }
+
+  /**
+   * Rename a property
+   * @param {string|NotionProperty} id id or name of property to rename
+   * @param {string} newName
+   * @returns {void}
+   */
+  rename(id, newName) {
+    if (id instanceof NotionProperty) id = id.data.id || ''
+    if (isEmptyVariable(id) || isEmptyVariable(newName)) return
+    this.data.properties[ id ] = {
+      name: newName
+    }
+  }
+
+  /**
+   * Change property type
+   * @param {string|NotionProperty} id id or name of property to change type
+   * @param {string} newType
+   * @returns {void}
+   */
+  changeType(id, newType) {
+    if (id instanceof NotionProperty) id = id.data.id || ''
+    if (isEmptyVariable(id) || isEmptyVariable(newType)) return
+    this.data.properties[ id ] = {
+      [ newType ]: {}
+    }
+  }
+
+  /**
+   * 
+   * @param {string} pid id or name of property to update options
+   * @param {string} pType property type
+   * @param {Object} options
+   * @param {string[]} [options.id]
+   * @param {string[]} [options.name]
+   * @returns {void}
+   */
+  update_options(pid, pType, { id, name } = {}) {
+    if (pid instanceof NotionProperty) pid = pid.data.id || ''
+    if (isEmptyVariable(pid) || isEmptyVariable(pType)) return
+    let options = []
+    if (isValidArray(id)) {
+      id.forEach(v => {
+        if (!isEmptyVariable(v))
+          options.push({ id: v })
+      })
+    } else if (isValidArray(name)) {
+      name.forEach(v => {
+        if (!isEmptyVariable(v))
+          options.push({ name: v })
+      })
+    }
+    if (!options.length) return
+    this.data.properties[ pid ] = {
+      [ pType ]: {
+        options
+      }
+    }
+  }
+
+  /**
+   * Update select options
+   * @param {string} pid id or name of property to update options
+   * @param {Object} options
+   * @param {string[]} [options.id]
+   * @param {string[]} [options.name]
+   * @returns {void}
+   */
+  select_options(pid, { id, name } = {}) {
+    return this.update_options(pid, 'select', { id, name })
+  }
+
+  /**
+   * Update multi_select options
+   * @param {string} pid id or name of property to update options
+   * @param {Object} options
+   * @param {string[]} [options.id]
+   * @param {string[]} [options.name]
+   * @returns {void}
+   */
+  multi_select_options(pid, { id, name } = {}) {
+    return this.update_options(pid, 'multi_select', { id, name })
+  }
+
+}
+
+
+
 
 /**
  * @class
@@ -1113,6 +1240,36 @@ class NotionAPI {
     } else {
       console.error({
         url: 'https://api.notion.com/v1/pages/' + pageId,
+        method: 'patch',
+        token: this.token,
+        headers: this.headers,
+        message: res.getContentText()
+      })
+    }
+
+    return output
+  }
+
+  updateDatabase(databaseId = '', payload = {}) {
+    let output = {}
+    const headers = this._generateHeader()
+    if (!headers) return output
+    if (!databaseId) {
+      console.error('Can not update database without database id')
+      return output
+    }
+
+    const res = UrlFetchApp.fetch('https://api.notion.com/v1/databases/' + databaseId, {
+      muteHttpExceptions: true,
+      method: 'patch',
+      headers: this.headers || {},
+      payload: JSON.stringify(payload)
+    })
+    if (res.getResponseCode() == '200') {
+      return JSON.parse(res.getContentText())
+    } else {
+      console.error({
+        url: 'https://api.notion.com/v1/databases/' + databaseId,
         method: 'patch',
         token: this.token,
         headers: this.headers,
@@ -1510,7 +1667,7 @@ class NotionProperty {
     return null
   }
   getMultiSelectValue(data = []) {
-    if (data.length) {
+    if (data?.length) {
       return data.map(d => d.name)
     }
     return null
@@ -1538,7 +1695,7 @@ class NotionProperty {
   _getValue(data) {
     if (data && Object.keys(data).length && data.type) {
       switch (data.type) {
-        case 'string': case 'number': case 'checkbox':
+        case 'string': case 'url': case 'number': case 'checkbox':
           return data[ data.type ]
         case 'rich_text':
           return this.getRichtextValue(data.rich_text)
@@ -1552,7 +1709,7 @@ class NotionProperty {
         case 'rollup':
           return this.getRollupValue(data.rollup)
         case 'select':
-          return data.select.name
+          return data.select?.name
         case 'multi_select':
           return this.getMultiSelectValue(data.multi_select)
         case 'title':

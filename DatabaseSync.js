@@ -5,6 +5,7 @@
  * @param {BillSheetClass} [options.sheet] BillSheet
  * @param {any[]} [options.data=[]] Sheet data. If not provided and `sheet` is provided, will get data from `sheet`
  * @param {string} options.databaseId Notion database ID
+ * @param {{}} [options.databaseFilter] Notion database filter. To reduce the number of pages to be pulled/pushed
  * @param {NotionSyncProperty[]} [options.sProps=[]] Sheet properties to sync to Notion. The value of each property in sheet will be synced to the corresponding property in Notion (Sheet -> Notion). Example: [{name: 'Time', type: NOTION_DATA_TYPE.date}]
  * @param {NotionSyncProperty[]} [options.nProps=[]] Notion properties to sync to Sheet. The value of each property in Notion will be synced to the corresponding property in Sheet (Notion -> Sheet). Example: [{name: 'Time', type: NOTION_DATA_TYPE.date}]
  * @param {string|string[]} options.idProp Identifier properties. The value of these properties will be used to identify the row in Notion and Sheet
@@ -30,6 +31,7 @@ function DatabaseSync({
   sheet = {},
   data = [],
   databaseId = '',
+  databaseFilter = {},
   sProps = [],
   nProps = [],
   idProp = [],
@@ -50,6 +52,7 @@ function DatabaseSync({
     nProps,
     idProp,
     databaseId,
+    databaseFilter,
     useDelete,
     useAdd,
     usePull,
@@ -72,6 +75,7 @@ class DatabaseSyncClass {
    * @param {BillSheetClass} [options.sheet] BillSheet
    * @param {any[]} [options.data=[]] Sheet data. If not provided and `sheet` is provided, will get data from `sheet`
    * @param {string} options.databaseId Notion database ID
+   * @param {{}} [options.databaseFilter] Notion database filter. To reduce the number of pages to be pulled/pushed
    * @param {NotionSyncProperty|NotionSyncProperty[]} [options.sProps=[]] Sheet properties to sync to Notion. The value of each property in sheet will be synced to the corresponding property in Notion (Sheet -> Notion). Example: [{name: 'Time', type: NOTION_DATA_TYPE.date}]
    * @param {NotionSyncProperty|NotionSyncProperty[]} [options.nProps=[]] Notion properties to sync to Sheet. The value of each property in Notion will be synced to the corresponding property in Sheet (Notion -> Sheet). Example: [{name: 'Time', type: NOTION_DATA_TYPE.date}]
    * @param {string|string[]} options.idProp Identifier properties. The value of these properties will be used to identify the row in Notion and Sheet
@@ -96,6 +100,7 @@ class DatabaseSyncClass {
     sheet = {},
     data = [],
     databaseId = '',
+    databaseFilter = {},
     sProps = [],
     nProps = [],
     idProp = [],
@@ -110,6 +115,7 @@ class DatabaseSyncClass {
   } = {}) {
     this.notionToken = notionToken || ''
     this.databaseId = databaseId || ''
+    this.databaseFilter = databaseFilter || {}
     this.sheet = null
     this.data = data
     this.sProps = sProps
@@ -154,6 +160,13 @@ class DatabaseSyncClass {
     if (!isValidArray(this.idProp)) {
       this.idProp = []
     }
+    if (isValidObject(this.databaseFilter)) {
+      if (this.databaseFilter.filter == undefined) {
+        this.databaseFilter = { filter: this.databaseFilter }
+      }
+    } else {
+      this.databaseFilter = {}
+    }
     if (fCustomPush && typeof fCustomPush === 'function') {
       this.fCustomPush = fCustomPush
     }
@@ -177,6 +190,47 @@ class DatabaseSyncClass {
   }
 
   /**
+   * Comapre two properties
+   * @param {any} a First property value
+   * @param {any} b Second property value
+   * @param {string} type Property type
+   * @returns {boolean} true if equal
+   */
+  propCompare(a, b, type) {
+    switch (type) {
+      case NOTION_DATA_TYPE.date:
+        return compareDate(a, b, { second: false, millisecond: false })
+      case NOTION_DATA_TYPE.number:
+        a = Number(a)
+        b = Number(b)
+        return (isNaN(a) && isNaN(b)) || (a == b)
+      default:
+        return smartCompare(a, b)
+    }
+  }
+
+  /**
+   * Compare Sheet row with Notion page
+   * @param {{}} a Sheet row
+   * @param {*} b Notion page
+   * @param {*} props Properties to compare
+   * @returns {boolean} true if equal
+   */
+  pageCompare(a, b, props) {
+    let result = true
+    if (!isValidObject(a) || !isValidObject(b)) return false
+    if (!isValidArray(props)) {
+      console.error('props can not empty')
+      return false
+    }
+    for (const p of props) {
+      result = result && this.propCompare(a[ p.name ], b[ p.name ], p.type)
+      if (!result) break
+    }
+    return result
+  }
+
+  /**
    * Compare Sheet data with Notion data
    * @param {{}[]} sheet Sheet data
    * @param {{}[]} notion Notion data
@@ -186,7 +240,7 @@ class DatabaseSyncClass {
    * @return {{type: string, sheet: number, notion: number}[]} Changes
    */
   compare(sheet = [], notion = [], idProp = [], sProps = [], nProps = []) {
-    if(!isValidArray(idProp)){
+    if (!isValidArray(idProp)) {
       console.error('idProp can not empty')
       return []
     }
@@ -195,73 +249,46 @@ class DatabaseSyncClass {
     if (sheet && notion) {
 
       for (const i in sheet) {
-        let macthId = 0
         let subRes = {}
 
         // Check unempty item in Sheet by idProp
-        for (const idp of idProp) {
-          if (!isEmptyVariable(sheet[ i ][ idp ])) {
-            macthId++
-          }
-        }
-
-        // If not valid item, skip to next item
-        if (macthId != idProp.length) {
+        if (!idProp.some(id => !isEmptyVariable(sheet[ i ][ id ]))) {
           continue
         }
 
         // If valid, find item in Notion and compare
         for (const j in notion) {
-          let match = 0
-          for (const idp of idProp) {
-            if (smartCompare(sheet[ i ][ idp ], notion[ j ][ idp ])) {
-              match++
-            }
-          }
-          if (match == idProp.length) {
+
+          if (idProp.every(id => {
+            let propType = null
+            if (sProps && sProps.length) propType = sProps.find(p => p.name == id)?.type
+            if (!propType && nProps && nProps.length) propType = nProps.find(p => p.name == id)?.type
+            return this.propCompare(sheet[ i ][ id ], notion[ j ][ id ], propType)
+          })) {
+
             readList.push(j)
             let anyPushChange = false
             let anyPullChange = false
 
             if (sProps && sProps.length) {
-              const sPropsMap = sProps.map(p => p.name)
-              if (!compareObject(sheet[ i ], notion[ j ], sPropsMap)) {
+              if (!this.pageCompare(sheet[ i ], notion[ j ], sProps)) {
                 anyPushChange = true
               }
-              // for (const k in sProps) {
-              //   const spk = sProps[ k ][ 'name' ]
-              //   if (!isEmptyVariable(sheet[ i ][ spk ])) {
-              //     if (!isEmptyVariable(notion[ j ][ spk ])) {
-              //       if (!smartCompare(sheet[ i ][ spk ], notion[ j ][ spk ])) {
-              //         anyPushChange = true
-              //         break
-              //       }
-              //     } else {
-              //       anyPushChange = true
-              //       break
-              //     }
-              //   }
+
+              // const sPropsMap = sProps.map(p => p.name)
+              // if (!compareObject(sheet[ i ], notion[ j ], sPropsMap)) {
+              //   anyPushChange = true
               // }
             }
 
             if (nProps && nProps.length) {
-              const nPropsMap = nProps.map(p => p.name)
-              if (!compareObject(sheet[ i ], notion[ j ], nPropsMap)) {
+              if (!this.pageCompare(sheet[ i ], notion[ j ], nProps)) {
                 anyPullChange = true
               }
-              // for (const k in nProps) {
-              //   const npk = nProps[ k ][ 'name' ]
-              //   if (!smartCompare(notion[ j ][ npk ], null)) {
-              //     if (!smartCompare(sheet[ i ][ npk ], null)) {
-              //       if (!smartCompare(sheet[ i ][ npk ], notion[ j ][ npk ])) {
-              //         anyPullChange = true
-              //         break
-              //       }
-              //     } else {
-              //       anyPullChange = true
-              //       break
-              //     }
-              //   }
+
+              // const nPropsMap = nProps.map(p => p.name)
+              // if (!compareObject(sheet[ i ], notion[ j ], nPropsMap)) {
+              //   anyPullChange = true
               // }
             }
 
@@ -337,20 +364,36 @@ class DatabaseSyncClass {
 
   /**
    * Sync Sheet data with Notion data
+   * @param {Object} options
+   * @param {function} options.onPageAdded Callback when a page is added
+   * @param {function} options.onPageUpdated Callback when a page is updated
+   * @param {function} options.onPageDeleted Callback when a page is deleted
+   * @param {function} options.onPagePulled Callback when a page is pulled
    * @returns {{}[]} Notion database data
    */
-  sync() {
+  sync({
+    onPageAdded,
+    onPageUpdated,
+    onPageDeleted,
+    onPagePulled
+  } = {}) {
+
+    if (typeof onPageAdded !== 'function') onPageAdded = null
+    if (typeof onPageUpdated !== 'function') onPageUpdated = null
+    if (typeof onPageDeleted !== 'function') onPageDeleted = null
+    if (typeof onPagePulled !== 'function') onPagePulled = null
+
     // contains compare result
     const compareResult = {
       diffCnt: 0, notExcCnt: 0
     }
-    const { notionToken, data, sProps, nProps, databaseId, idProp, useDelete, useAdd, usePush, usePull, usePullNew } = this
+    const { notionToken, data, sProps, nProps, databaseId, databaseFilter, idProp, useDelete, useAdd, usePush, usePull, usePullNew } = this
     if (data && (sProps || nProps) && idProp && databaseId) {
       this.dbg('warn', 'Getting data from Notion...')
       let databaseData = new NotionDatabase({
         databaseId,
         token: notionToken
-      }).load()
+      }).load(databaseFilter)
       if (isValidArray(databaseData)) {
         // prepare data to compare
         let sheetData = data
@@ -372,20 +415,30 @@ class DatabaseSyncClass {
           compareResult.diffCnt += 1
           if (diff.type == 'ADD' && useAdd) {
             console.info('ADD => ', sheetData[ diff.sheet ])
-            this.createDatabaseItems(sheetData[ diff.sheet ], databaseId)
+            const page = this.createDatabaseItems(sheetData[ diff.sheet ], databaseId)
+            try { onPageAdded(new NotionPage({ page, token: notionToken })) }
+            catch (e) { this.dbg('error', 'Error at onPageAdded', e) }
           } else if (diff.type == 'DELETE' && useDelete) {
             console.info('DELETE => ', notionData[ diff.notion ].page_info.page_id)
-            this.deleteDatabaseItems(notionData[ diff.notion ].page_info.page_id)
+            const page = this.deleteDatabaseItems(notionData[ diff.notion ].page_info.page_id)
+            try { onPageDeleted(new NotionPage({ page, token: notionToken })) }
+            catch (e) { this.dbg('error', 'Error at onPageDeleted', e) }
           } else if (diff.type == 'PUSH' && usePush) {
             console.info('PUSH => ', sheetData[ diff.sheet ])
             console.info('===>', notionData[ diff.notion ])
-            this.updateDatabaseItems(sheetData[ diff.sheet ], notionData[ diff.notion ].page_info.page_id)
+            const page = this.updateDatabaseItems(sheetData[ diff.sheet ], notionData[ diff.notion ].page_info.page_id)
+            try { onPageUpdated(new NotionPage({ page, token: notionToken })) }
+            catch (e) { this.dbg('error', 'Error at onPageUpdated', e) }
           } else if (diff.type == 'PULL' && usePull) {
             console.info('PULL => ', notionData[ diff.notion ])
-            this.pullDataToSheet(notionData[ diff.notion ])
+            const page = this.pullDataToSheet(notionData[ diff.notion ])
+            try { onPagePulled(new NotionPage({ page, token: notionToken })) }
+            catch (e) { this.dbg('error', 'Error at onPagePulled', e) }
           } else if (diff.type == 'PULL_NEW' && usePullNew) {
             console.info('PULL_NEW => ', notionData[ diff.notion ])
             this.pullDataToSheet(notionData[ diff.notion ])
+            try { onPagePulled(notionData[ diff.notion ]) }
+            catch (e) { this.dbg('error', 'Error at onPagePulled', e) }
           } else {
             compareResult.notExcCnt += 1
             this.dbg('log', 'Not Exec =>', {
@@ -414,7 +467,7 @@ class DatabaseSyncClass {
    * Update Notion page(s)
    * @param {{}|{}[]} data data to update
    * @param {string} pageId Notion page id
-   * @return {boolean} true if success
+   * @return {{}} true if success
    */
   updateDatabaseItems(data = {}, pageId = '') {
     if (data) {
@@ -435,19 +488,18 @@ class DatabaseSyncClass {
             payload = fcall.payload || payload
           }
         }
-        new NotionAPI({ token: this.notionToken }).updatePage(pageId, payload)
+        return new NotionAPI({ token: this.notionToken }).updatePage(pageId, payload)
       }
-      return true
     }
     console.error('Can not update Notion page without page id')
-    return false
+    return {}
   }
 
   /**
    * Create Notion page(s)
    * @param {{}|{}[]} data data of new page(s)
    * @param {string} databaseId Notion database id
-   * @return {boolean} true if success
+   * @return {{}} true if success
    */
   createDatabaseItems(data = {}, databaseId = '') {
     if (databaseId && isValidObject(data)) {
@@ -478,29 +530,27 @@ class DatabaseSyncClass {
             payload = fcall.payload || payload
           }
         }
-        new NotionAPI({ token: this.notionToken }).createPage({
+        return new NotionAPI({ token: this.notionToken }).createPage({
           "parent": { "database_id": databaseId },
           ...payload
         })
       }
-      return true
     }
     console.error('Can not create a Notion page without database id')
-    return false
+    return {}
   }
 
   /**
    * Delete Notion page(s)
    * @param {string} pageId Notion page id to delete
-   * @return {boolean} true if success
+   * @return {{}} true if success
    */
   deleteDatabaseItems(pageId = '') {
     if (pageId) {
-      new NotionAPI({ token: this.notionToken }).deletePage(pageId)
-      return true
+      return new NotionAPI({ token: this.notionToken }).deletePage(pageId)
     }
     console.error('Can not delete Notion page without page id')
-    return false
+    return {}
   }
 
   /**
