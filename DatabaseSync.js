@@ -394,6 +394,8 @@ class DatabaseSyncClass {
         databaseId,
         token: notionToken
       }).load(databaseFilter)
+
+      // If the database is not empty, then compare
       if (isValidArray(databaseData)) {
         // prepare data to compare
         let sheetData = data
@@ -457,6 +459,17 @@ class DatabaseSyncClass {
         }
         return notionData
       }
+
+      // If database is empty, then create new pages in database
+      else if (useAdd) {
+        for (const row of data) {
+          console.info('ADD => ', row)
+          const page = this.createDatabaseItems(row, databaseId)
+          try { onPageAdded(new NotionPage({ page, token: notionToken })) }
+          catch (e) { this.dbg('error', 'Error at onPageAdded', e) }
+        }
+      }
+
     }
 
     this.dbg('warn', 'Invalid data to sync')
