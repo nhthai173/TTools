@@ -5,14 +5,21 @@ function Cal(options) {
 
 /**
  * Chưa hoàn thiện:
- * [] Xử lý trường hợp xóa event trên calendar khi xóa trên sheet
- * [] Làm sao để xác định được 1 event cần pull về hay cần xóa nếu không tìm thấy nó trong sheet
- * [] Update row dựa trên updateList
- * [] Delete row dựa trên deleteList
+ * [] Code phần xóa event khi xóa row trên sheet
+ * [] Gọi hàm callback sau khi sync
+ * [] Tạo method để có thể đồng bộ thủ công event từ Calendar về Sheet
  * [] Thêm method createEvent để có thể tạo event đồng thời trên sheet và calendar
  * [] Thêm method deleteEvent để có thể xóa event đồng thời trên sheet và calendar
  * [] Thêm method updateEvent để có thể update event đồng thời trên sheet và calendar
- * [] Tìm cách để xác định sheetLastUpdated, và callback nó về sync (hữu ích khi xóa cả hàng, lúc này sẽ xác định được event của hàng này cần phải xóa)
+ * -------- *
+ * [x] Tạo static method để calc lastUpdated (gọi nó trong onEdit)
+ * [x] Thêm prop startDay, endDay/numberOfFutureDays để có thể lấy được toàn bộ event từ Calendar
+ * [x] Xử lý trường hợp xóa event trên calendar khi xóa trên sheet
+ *  └─ Đã có idea bên dưới
+ * [x] Làm sao để xác định được 1 event cần pull về hay cần xóa nếu không tìm thấy nó trong sheet
+ *  └─ Đã có idea bên dưới
+ * [x] Update row dựa trên updateList
+ * [x] Delete row dựa trên deleteList
  */
 
 
@@ -20,9 +27,13 @@ function Cal(options) {
  * @class CalendarClass
  * @classdesc easily create and update events from Sheet to Calendar
  * 
- * To determine which row is which event, we use a property named '_eventId' to store the event id from GCalendar. If you want to use your own property, you can set it in `idProp`. If you use default we will add new columns in your sheet named `_eventId`, so you should not remove it from the sheet.
+ * To determine which row is which event, we use a property named '_eventId' to store the event id from GCalendar. If you want to use your own property, you can set it in `eidProp`. If you use default we will add new columns in your sheet named `_eventId`, so you should not remove it from the sheet.
  * 
- * To determine which is the latest data source, we use 2 properties to store the last updated time of sheet and calendar. If you want to use your own property, you can set it in `sheetLastUpdatedProp` and `calLastUpdatedProp`. If you use default we will add 2 new columns in your sheet named `_sheetLastUpdated` and `_calLastUpdated, so you should not remove them from the sheet.
+ * To determine which is the latest data source, we use a property to store the last updated time of sheet. If you want to use your own property, you can set it in `lastUpdatedProp`. If you use default we will add a new column in your sheet named `_sheetLastUpdated`, so you should not remove them from the sheet.
+ * 
+ * Để đồng bộ những event từ Calendar về Sheet thì bắt buộc các event này phải chứa trong calendar đó
+ * Tạo một method riêng để user có thể chạy lệnh này manual để đồng bộ các event từ Calendar nào đó về Sheet
+ * 
  */
 class CalendarClass {
 
@@ -32,44 +43,50 @@ class CalendarClass {
    * @param {CalendarApp.Calendar} [options.cal=null] Calendar object
    * @param {string} [options.calId=''] Calendar ID
    * @param {BillSheetClass} [options.billSheet=null] BillSheet object
-   * @param {string|string[]} [options.idProp='_eventId'] The property name of the unique ID for each row
-   * @param {string} [options.sheetLastUpdatedProp='_sheetLastUpdated'] The property name of the last updated time of sheet
-   * @param {string} [options.calLastUpdatedProp='_calLastUpdated'] The property name of the last updated time of calendar
+   * @param {string|string[]} [options.eidProp='_eventId'] The property name of the unique ID for each row
+   * @param {string} [options.lastUpdatedProp='_sheetLastUpdated'] The property name of the last updated time of sheet
+   * @param {string} [options.dateProp=''] The property name of the start date of event in Sheet. This is optional, if provided, it will exec faster
+   * @param {Date} [options.startDay] The start day to get events from Calendar. It will be used to pull events from Calendar to Sheet
+   * @param {Date} [options.endDay] The end day to get events from Calendar. If it is null, will use numberOfFutureDays. It will be used to pull events from Calendar to Sheet
+   * @param {number} [options.numberOfFutureDays=0] The number of future days from now to get events from Calendar. It will be used to pull events from Calendar to Sheet
    * @param {boolean} [options.useAdd=false] If true, will add events to calendar base on the sheet
    * @param {boolean} [options.usePush=false] If true, will push events detail to Calendar, if it is different from the sheet. Otherwise, it only create the events once (when the row is append to sheet) and never update it.
    * @param {boolean} [options.usePull=false] If true, will pull events detail to Sheet, if it is different from the sheet. It update base on the last update time, so it will not update the event if the sheet is updated after the calendar.
    * @param {boolean} [options.usePullNew=false] If true, will pull new events to Sheet, if the sheet does not have it.
-   * @param {boolean} [options.useDeleteBaseOnSheet=false] If true, will delete events on calendar if the row is deleted on the sheet
    * @param {boolean} [options.useDeleteBaseOnCalendar=false] If true, will delete events on sheet if the event is deleted on the calendar.
    */
   constructor({
+    debug = false,
     cal = null,
     calId = '',
     billSheet = null,
-    idProp = '_eventId',
-    sheetLastUpdatedProp = '_sheetLastUpdated',
-    calLastUpdatedProp = '_calLastUpdated',
+    eidProp = '_eventId',
+    lastUpdatedProp = '_sheetLastUpdated',
+    dateProp = '',
+    startDay = null,
+    endDay = null,
+    numberOfFutureDays = 0,
     useAdd = false,
     usePush = false,
     usePull = false,
     usePullNew = false,
-    useDeleteBaseOnSheet = false,
-    useDeleteBaseOnCalendar = false,
-    callback = null
+    useDeleteBaseOnCalendar = false
   } = {}) {
+    this.debug = debug
     this.calId = calId || null
     this.cal = cal || CalendarApp.getCalendarById(this.calId)
     this.billSheet = billSheet || null
-    this.idProp = idProp
-    this.sheetLastUpdatedProp = sheetLastUpdatedProp
-    this.calLastUpdatedProp = calLastUpdatedProp
+    this.eidProp = eidProp
+    this.lastUpdatedProp = lastUpdatedProp
+    this.dateProp = dateProp
+    this.startDay = startDay
+    this.endDay = endDay
+    this.numberOfFutureDays = numberOfFutureDays
     this.useAdd = useAdd || false
     this.usePush = usePush || false
     this.usePull = usePull || false
     this.usePullNew = usePullNew || false
-    this.useDeleteBaseOnSheet = useDeleteBaseOnSheet || false
     this.useDeleteBaseOnCalendar = useDeleteBaseOnCalendar || false
-    this.callback = callback || null
 
 
     if (!this.cal) {
@@ -80,10 +97,47 @@ class CalendarClass {
       console.error('No BillSheet set')
       return
     }
-    if (typeof callback !== 'function') {
-      this.callback = null
+
+  }
+
+  /**
+   * Call this function in onEdit to update the lastUpdated time
+   * @param {*} e 
+   * @returns {void}
+   */
+  calSyncHandler(e) {
+    /* Find lastUpdated column index */
+    const path = this.billSheet.path
+    const lastUpdatedColIndex = path[ this.lastUpdatedProp ] || -1
+    const eidColIndex = path[ this.eidProp ] || -1
+    if (lastUpdatedColIndex < 0) return
+
+    const { authMode, triggerUid, source, range, oldValue, value, user } = e
+    const { rowStart, columnStart, rowEnd, columnEnd } = range
+    let ignore = false
+
+    if (lastUpdatedColIndex >= columnStart && lastUpdatedColIndex <= columnEnd) {
+      ignore = true
     }
 
+    const sheet = this.sheet()
+    const eSheet = range.getSheet()
+    const isotime = new Date().toISOString()
+
+    // save deleted events
+    // --> delete event imediately when a row is deleted
+    // Trường hợp delete từng cell --> sẽ không xóa cell eid, để khi row chỉ còn có mỗi cell eid thì sẽ xóa event đó
+    // Trường hợp delete nguyên row --> easy
+    // Remove lastUpdated on empty row
+
+    if (sheet.getName() != eSheet.getName()) return
+    const targetRange = eSheet.getRange(rowStart, lastUpdatedColIndex, (rowEnd - rowStart) + 1, 1)
+    let tdata = targetRange.getValues().map(row => (row.map(col => {
+      if (ignore) col = this._getTimestamp(col)
+      if (ignore && col) return new Date(col).toISOString()
+      return isotime
+    })))
+    targetRange.setValues(tdata)
   }
 
   /**
@@ -95,34 +149,53 @@ class CalendarClass {
   }
 
   /**
-   * Return the BillSheet object
-   * @returns {BillSheetClass}
+   * Return the Sheet object
+   * @returns {SpreadsheetApp}
    */
   sheet() {
-    return this.billSheet
+    return this.billSheet._sheet()
   }
 
   /**
-   * Execute the callback function
-   * @param {CalendarApp.Event} event 
-   * @param {{}} row 
-   * @param {string} type 
-   * @returns 
+   * Log debug message
+   * @param {string} type Log type
+   * @param {string} message message to log
    */
-  _callback(event, row, type) {
-    if (!this.callback) return
-    try {
-      this.callback(event, row, type, this.billSheet)
-    } catch (e) { console.warn('[Error at Callback]', e) }
+  _dbg(type, message, ...args) {
+    if (!this.debug) return
+    console[type](message, ...args)
   }
 
-  _inheritEvent() {
-    return {
-      event: this.cal.createEvent('inherit', new Date(0), new Date(3600000)),
-      start: new Date(0),
-      end: new Date(3600000),
-      title: 'inherit'
+  /**
+   * Return some event detail for logging
+   * @param {CalendarApp.Event} event
+   * @param {{title: string, id: string, start: string, end: string}}
+   */
+  _shortEvent(event) {
+    if (!event) {
+      return {
+        eventIsNull: true
+      }
     }
+    return {
+      title: event.getTitle(),
+      id: event.getId(),
+      start: event.getStartTime()?.toISOString(),
+      end: event.getEndTime()?.toISOString()
+    }
+  }
+
+  /**
+   * Try to get timestamp from input
+   * @param {*} time
+   * @returns {number|null}
+   */
+  _getTimestamp(time) {
+    if (!time) return null
+    try {
+      return new Date(time).getTime() || null
+    } catch (e) { }
+    return null
   }
 
   /**
@@ -166,16 +239,62 @@ class CalendarClass {
   }
 
   /**
+   * Get events from Calendar by `startDay` and `endDay`/`numberOfFutureDays`. If not provided, use the time range of the Sheet
+   * @param {{}[]} [sheetData] 
+   * @returns {{}} Object list with the key is event id
+   */
+  getEvents(sheetData) {
+    let result = {}
+    const { startDay, endDay, numberOfFutureDays, dateProp } = this
+    let range = [ null, null ]
+
+    // Get Range from input
+    if (startDay) {
+      if (endDay) {
+        range = [ startDay, endDay ]
+      } else if (numberOfFutureDays > 0) {
+        const tdate = new Date()
+        tdate.setHours(0, 0, 0, 0)
+        tdate.setDate(tdate.getDate() + numberOfFutureDays + 1)
+        range = [ startDay, tdate ]
+      }
+    }
+
+    // Get range from sheet
+    if (!range[ 0 ] && dateProp) {
+      if (!isValidArray(sheetData) || !isValidObject(sheetData[ 0 ])) {
+        if (this.billSheet) {
+          sheetData = this.billSheet.toJSON()
+        }
+      }
+      if (!isValidArray(sheetData) || !isValidObject(sheetData[ 0 ])) return result
+      const ts = sheetData
+        .map(r => this._getTimestamp(r[ dateProp ]) || 0)
+        .filter(r => r > 0)
+      range = [ new Date(Math.min(...ts)), new Date(Math.max(...ts)) ]
+    }
+
+    if (!range[ 0 ] && !range[ 1 ]) {
+      this._dbg('log', `Get all events from ${range[0].toISOString()} -> ${range[1].toISOString()}`)
+      const evs = this.cal.getEvents(range[ 0 ], range[ 1 ])
+      this._dbg('log', `==> Got ${evs.length} events`)
+      evs.forEach(ev => {
+        result[ ev.getId() ] = ev
+      })
+    }
+
+    return result
+  }
+
+  /**
    * Compare the last updated time of sheet and calendar
    * @param {Date|number} sheetLastUpdated 
    * @param {Date|number} calLastUpdated 
    * @returns {"SHEET"|"CALENDAR"|null} null is equal
    */
   _compareEvent(sheetLastUpdated, calLastUpdated) {
-    sheetLastUpdated = sheetLastUpdated || 0
-    calLastUpdated = calLastUpdated || 0
-    if (typeof sheetLastUpdated != 'number') sheetLastUpdated = sheetLastUpdated.getTime()
-    if (typeof calLastUpdated != 'number') calLastUpdated = calLastUpdated.getTime()
+    sheetLastUpdated = this._getTimestamp(sheetLastUpdated) || 0
+    calLastUpdated = this._getTimestamp(calLastUpdated) || 0
     const gap = sheetLastUpdated - calLastUpdated
     return gap > 0 ? 'SHEET' : gap < 0 ? 'CALENDAR' : null
   }
@@ -184,103 +303,138 @@ class CalendarClass {
    * Sync events between the calendar and the sheet
    */
   sync() {
-    if (!this.billSheet) return
-    if (!this.cal) return
+    this._dbg('warn', 'START SYNC')
+    if (!this.billSheet) return console.error('Cannot sync without BillSheet!')
+    if (!this.cal) return console.error('Cannot sync without Calendar!')
 
-    const { idProp, sheetLastUpdatedProp, calLastUpdatedProp, useAdd, usePush, usePull, usePullNew, useDeleteBaseOnCalendar, useDeleteBaseOnSheet } = this
+    const { eidProp, lastUpdatedProp, useAdd, usePush, usePull, usePullNew, useDeleteBaseOnCalendar } = this
     let sheetData = this.billSheet.toJSON()
     let updateList = []
     let deleteList = []
 
+    // Try to get all events in one request
+    this._dbg('log', 'Get all events From range')
+    let events = this.getEvents(sheetData)
+    // Otherwise get event of everysingle row
+    if (!isValidObject(events)) {
+      this._dbg('Cannot found events range. try to get events of every row')
+      sheetData.forEach(r => {
+        const eid = r[ eidProp ]
+        if (!eid) return
+        const ev = CalendarClass.getEvent(this.cal, eid)
+        if (!ev) return
+        events[ eid ] = ev
+      })
+    }
+
+    // Compare
+    this._dbg('warn', 'START COMPARE')
     sheetData.forEach(row => {
-      const eid = row[ idProp ] // event id stored in the sheet
-      const sheetLastUpdated = row[ sheetLastUpdatedProp ] ? new Date(row[ sheetLastUpdatedProp ]) : null
+      const eid = row[ eidProp ] // event id stored in the sheet
+      const sheetLastUpdated = row[ lastUpdatedProp ] ? new Date(row[ lastUpdatedProp ]) : null
+      this.log('log', `==> Event: ${eid}, lastUpdated: ${sheetLastUpdated} <==`)
+      
+      if (!sheetLastUpdated && !eid) {
+        console.warn('Cannot defined last updated of this row. Make sure you called CalSyncHandler() in onEdit()', row)
+      }
 
       /* Create new event */
       if (!eid) {
         if (!useAdd) return
+        this._dbg('log', '==> ADD NEW EVENT TO CALENDAR', row)
         if (!this.onCreate) return console.warn('No onCreate function!')
+        const ie = this.cal.createEvent('inherit', new Date(0), new Date(3600000))
         try {
-          const ie = this._inheritEvent()
-          this.onCreate('SHEET', row, ie.event)
-          if (ie.event.getStartTime().getTime() == ie.start.getTime()) {
+          this.onCreate('SHEET', row, ie)
+          if (ie.getStartTime().getTime() == 0) {
             console.warn('[Event not created] This is inherit event object, please edit it to create event', row)
-            ie.event.deleteEvent()
+            ie.deleteEvent()
             return
           }
-        } catch (e) { return console.error('[Error when add event]', e) }
-        row[ calLastUpdatedProp ] = ie.event.getLastUpdated().toISOString()
-        row[ sheetLastUpdatedProp ] = row[ calLastUpdatedProp ]
+        } catch (e) {
+          ie.deleteEvent()
+          return console.error('[Error when add event]', e)
+        }
+        this._dbg('log', '==> NEW EVENT detail', this._shortEvent(ie))
+        row[ lastUpdatedProp ] = ie.getLastUpdated().toISOString()
         return updateList.push(row)
       }
 
-      
-      const event = CalendarClass.getEvent(this.cal, eid)
+
+      const event = events[ eid ]
+      events[ eid ].readByCalendarSync = true
       let source = this._compareEvent(sheetLastUpdated, event?.getLastUpdated())
-      
+
       /* Delete event */
       if (!event) {
         if (!useDeleteBaseOnCalendar) return
+        this._dbg('log', `==> DELETE ROW, eventId: ${eid}`, row)
         if (!this.onDelete) return console.warn('No onDelete function!')
         source = 'CALENDAR'
         try {
-          this.onDelete(source, row, event)
+          this.onDelete("CALENDAR", row, event)
+          event.deleteEvent()
         } catch (e) { return console.error('[Error when delete event]', e) }
         return deleteList.push(row)
       }
-      
+
       /* Check update event */
       // check is any update: comapre base on last updated time
       // - In sheet, set a onEdit trigger to update the last updated time to a col (prop)
       // - In calendar, get by getLastUpdated()
       if (!usePush && !usePull) return
-      if (!this.onUpdate) return
       if (!source) return // equal - no changes
       if (!usePush && source == 'SHEET') return
       if (!usePull && source == 'CALENDAR') return
+      this._dbg('log', `==> UPDATE EVENT FROM ${source}`, row, this._shortEvent(event))
+      if (!this.onUpdate) return
       try {
         this.onUpdate(source, row, event)
       } catch (e) { return console.error('[Error when update event]', e) }
-      row[ calLastUpdatedProp ] = event.getLastUpdated().toISOString()
-      row[ sheetLastUpdatedProp ] = row[ calLastUpdatedProp ]
+      row[ lastUpdatedProp ] = event.getLastUpdated().toISOString() // event này được GET trước khi change, liệu cái lastUpdate này nó có chính xác hay không
       return updateList.push(row)
 
     })
 
-    if (updateList.length) {
+    // Handle event not in Sheet
+    for (const i in events) {
+      const event = events[ i ]
+      if (event.readByCalendarSync) continue
+      try {
 
+        /* Pull new */
+        if (usePullNew) {
+          this._dbg('log', `==> PULL NEW EVENT TO SHEET`, this._shortEvent(event))
+          if (this.onPullNew) {
+            let newRow = this.onPullNew(event)
+            if (!newRow) {
+              console.warn('[Event not pulled] because onPullNew return null', event)
+              continue
+            }
+            newRow[ eidProp ] = event.getId()
+            updateList.push(newRow)
+            this._dbg('log', '==> NEW ROW', newRow)
+          }
+        }
+
+        /* Delete base on sheet */
+        /** @deprecated **/
+
+      } catch (e) {
+        return console.error('[Error when handle event not in sheet]', e)
+      }
+    }
+
+    if (updateList.length) {
+      this._dbg('warn', `UPDATING ${updateList.length} rows`)
+      this.billSheet.update(updateList, [ eidProp, ...this.billSheet.uniquePropList ])
     }
 
     if (deleteList.length) {
-
+      this._dbg('warn', `DELETING ${updateList.length} rows`)
+      this.billSheet.remove(deleteList, [ eidProp, ...this.billSheet.uniquePropList ])
     }
 
-    /* Match events */
-    if (this.fMatch) {
-      if (!this.matchStart) return console.warn('matchStart is unset!')
-      if (!this.matchEnd) return console.warn('matchEnd is unset!')
-      const events = this.cal.getEvents(this.matchStart, this.matchEnd)
-      events.forEach(event => {
-        try {
-          if (!this.fMatch(event)) return
-          if (sheetData.some(row => row[ idProp ] == event.getId())) return
-
-          // làm sao để xác định được event này cần xóa hay cần pull về sheet?
-
-          /* Pull new */
-          if (usePullNew && this.onPullNew) {
-            this.onPullNew(event)
-          }
-
-          /* Delete base on sheet */
-          if (useDeleteBaseOnSheet && this.onDelete) {
-            this.onDelete('SHEET', null, event)
-            event.deleteEvent()
-          }
-
-        } catch (e) { console.error('[Error when match event]', e)}
-      })
-    }
   }
 
   /**
@@ -300,6 +454,20 @@ class CalendarClass {
   }
 
   /**
+   * A function to run when an event need to be appended to the sheet
+   * @param {(event:CalendarApp.Event) => Object} callback
+   * The function should return a row object
+   * 
+   * `event` - The event object
+   */
+  onPullNew(callback) {
+    if (!callback || typeof callback !== 'function')
+      this.onPullNew = null
+    else
+      this.onPullNew = callback
+  }
+
+  /**
    * A function to run when an event need to be updated
    * @param {(source:"SHEET"|"CALENDAR", row:{}, event:CalendarApp.Event) => {}} callback
    * `source` - If "SHEET", it means this event need to be updated from the sheet. If "CALENDAR", it means this event need to be updated from the calendar.
@@ -316,8 +484,8 @@ class CalendarClass {
   }
 
   /**
-   * A function to run when an event need to be deleted
-   * @param {(source:"SHEET"|"CALENDAR", row:{}, event:CalendarApp.Event) => {}} callback
+   * A function to run when detect an event has been deleted from the Calendar
+   * @param {(source:"CALENDAR", row:{}, event:CalendarApp.Event) => {}} callback
    * `source` - If "SHEET", it means a row is deleted from the sheet. If "CALENDAR", it means an event is deleted from the calendar.
    * 
    * `row` - The row data. If you change the row, it will be updated to the sheet. If source is "SHEET", it will be null.
@@ -329,37 +497,6 @@ class CalendarClass {
       this.onDelete = null
     else
       this.onDelete = callback
-  }
-
-  /**
-   * The function that matchs events with your sheet (is the event part of the table's sequence of events)
-   * @param {Date} start start time
-   * @param {Date} end end time
-   * @param {(event:CalendarApp.Event)=>boolean} callback
-   */
-  setEventMatchFunction(start, end, callback) {
-    if (!start || !end) return
-    if (start.getTime() > end.getTime()) return console.error('[Error at fMatch] Start time must be before end time')
-    this.matchStart = start
-    this.matchEnd = end
-    if (!callback || typeof callback !== 'function')
-      this.fMatch = null
-    else
-      this.fMatch = callback
-  }
-
-  /**
-   * A function to run when an event need to be appended to the sheet
-   * @param {(event:CalendarApp.Event) => Object} callback
-   * The function should return a row object
-   * 
-   * `event` - The event object
-   */
-  onPullNew(callback) {
-    if (!callback || typeof callback !== 'function')
-      this.onPullNew = null
-    else
-      this.onPullNew = callback
   }
 
 }
