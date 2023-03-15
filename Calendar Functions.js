@@ -5,13 +5,16 @@ function Cal(options) {
 
 /**
  * Chưa hoàn thiện:
- * [] Code phần xóa event khi xóa row trên sheet
- * [] Gọi hàm callback sau khi sync
  * [] Tạo method để có thể đồng bộ thủ công event từ Calendar về Sheet
  * [] Thêm method createEvent để có thể tạo event đồng thời trên sheet và calendar
  * [] Thêm method deleteEvent để có thể xóa event đồng thời trên sheet và calendar
  * [] Thêm method updateEvent để có thể update event đồng thời trên sheet và calendar
- * -------- *
+ 
+* -------- *
+ * [x] Code phần xóa event khi xóa row trên sheet
+ *  └─ Không khả thi
+ * [x] Gọi hàm callback sau khi sync
+ *  └─ Đã bỏ
  * [x] Tạo static method để calc lastUpdated (gọi nó trong onEdit)
  * [x] Thêm prop startDay, endDay/numberOfFutureDays để có thể lấy được toàn bộ event từ Calendar
  * [x] Xử lý trường hợp xóa event trên calendar khi xóa trên sheet
@@ -109,12 +112,11 @@ class CalendarClass {
     /* Find lastUpdated column index */
     const path = this.billSheet.path
     const lastUpdatedColIndex = path[ this.lastUpdatedProp ] || -1
-    const eidColIndex = path[ this.eidProp ] || -1
     if (lastUpdatedColIndex < 0) return
 
     const { authMode, triggerUid, source, range, oldValue, value, user } = e
     const { rowStart, columnStart, rowEnd, columnEnd } = range
-    let ignore = false
+    let ignore = false // ignore update lastUpdated cell
 
     if (lastUpdatedColIndex >= columnStart && lastUpdatedColIndex <= columnEnd) {
       ignore = true
@@ -124,19 +126,20 @@ class CalendarClass {
     const eSheet = range.getSheet()
     const isotime = new Date().toISOString()
 
-    // save deleted events
-    // --> delete event imediately when a row is deleted
-    // Trường hợp delete từng cell --> sẽ không xóa cell eid, để khi row chỉ còn có mỗi cell eid thì sẽ xóa event đó
-    // Trường hợp delete nguyên row --> easy
-    // Remove lastUpdated on empty row
-
     if (sheet.getName() != eSheet.getName()) return
     const targetRange = eSheet.getRange(rowStart, lastUpdatedColIndex, (rowEnd - rowStart) + 1, 1)
-    let tdata = targetRange.getValues().map(row => (row.map(col => {
-      if (ignore) col = this._getTimestamp(col)
-      if (ignore && col) return new Date(col).toISOString()
-      return isotime
-    })))
+    const sheetVal = eSheet.getRange(rowStart, 1, (rowEnd - rowStart) + 1, eSheet.getLastColumn()).getValues()
+    let tdata = targetRange.getValues().map((row, i) => {
+      // All row data
+      let rowStr = sheetVal[ i ].join('').replace(sheetVal[ i ][ lastUpdatedColIndex - 1 ], '')
+      // If row is empty, remove lastUpdated
+      if (!rowStr) return new Array(row.length)
+      return row.map(col => {
+        if (ignore) col = this._getTimestamp(col)
+        if (ignore && col) return new Date(col).toISOString()
+        return isotime
+      })
+    })
     targetRange.setValues(tdata)
   }
 
