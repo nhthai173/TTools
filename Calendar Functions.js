@@ -6,24 +6,24 @@ function Cal(options) {
 /**
  * Chưa hoàn thiện:
  * [] Tạo method để có thể đồng bộ thủ công event từ Calendar về Sheet
- * [] Thêm method createEvent để có thể tạo event đồng thời trên sheet và calendar
  * [] Thêm method deleteEvent để có thể xóa event đồng thời trên sheet và calendar
- * [] Thêm method updateEvent để có thể update event đồng thời trên sheet và calendar
- 
-* -------- *
- * [x] Code phần xóa event khi xóa row trên sheet
- *  └─ Không khả thi
- * [x] Gọi hàm callback sau khi sync
- *  └─ Đã bỏ
- * [x] Tạo static method để calc lastUpdated (gọi nó trong onEdit)
- * [x] Thêm prop startDay, endDay/numberOfFutureDays để có thể lấy được toàn bộ event từ Calendar
- * [x] Xử lý trường hợp xóa event trên calendar khi xóa trên sheet
- *  └─ Đã có idea bên dưới
- * [x] Làm sao để xác định được 1 event cần pull về hay cần xóa nếu không tìm thấy nó trong sheet
- *  └─ Đã có idea bên dưới
- * [x] Update row dựa trên updateList
- * [x] Delete row dựa trên deleteList
- */
+
+ * -------- *
+  * [x] Thêm method updateEvent để có thể update event đồng thời trên sheet và calendar
+  * [x] Thêm method createEvent để có thể tạo event đồng thời trên sheet và calendar
+  * [x] Code phần xóa event khi xóa row trên sheet
+  *  └─ Không khả thi
+  * [x] Gọi hàm callback sau khi sync
+  *  └─ Đã bỏ
+  * [x] Tạo static method để calc lastUpdated (gọi nó trong onEdit)
+  * [x] Thêm prop startDay, endDay/numberOfFutureDays để có thể lấy được toàn bộ event từ Calendar
+  * [x] Xử lý trường hợp xóa event trên calendar khi xóa trên sheet
+  *  └─ Đã có idea bên dưới
+  * [x] Làm sao để xác định được 1 event cần pull về hay cần xóa nếu không tìm thấy nó trong sheet
+  *  └─ Đã có idea bên dưới
+  * [x] Update row dựa trên updateList
+  * [x] Delete row dựa trên deleteList
+*/
 
 
 /**
@@ -320,18 +320,29 @@ class CalendarClass {
 
   /**
    * Sync events between the calendar and the sheet
+   * @param {{}[]} [sheetData] Data to sync, if not provided, use the data from the sheet
+   * @returns {{created: {source: string, row: {}, event: CalendarApp.Event}[], updated: {source: string, row: {}|null, event: CalendarApp.Event}[], deleted: {source: string, row: {}, event: {id: string}}[]}} List of events have been created, updated, deleted
    */
-  sync() {
+  sync(sheetData) {
     this._dbg('warn', 'START SYNC')
     if (!this.isValidClass()) return
 
     const { eidProp, lastUpdatedProp, useAdd, usePush, usePull, usePullNew, useDeleteBaseOnCalendar } = this
-    let sheetData = this.billSheet.toJSON()
     let updateList = []
     let deleteList = []
-    let createdEvs = []
-    let updatedEvs = []
-    let deletedIds = []
+    let result = { created: [], updated: [], deleted: [] }
+
+    if (isEmptyVariable(sheetData)) {
+      sheetData = this.billSheet.toJSON()
+    } else {
+      if (isValidObject(sheetData)) {
+        sheetData = [ sheetData ]
+      }
+      if (!sheetData || !sheetData[ 0 ] || !isValidObject(sheetData[ 0 ])) {
+        console.error('[Error at sync] Invalid sheet data', sheetData)
+        return result
+      }
+    }
 
     // Try to get all events in one request
     this._dbg('log', 'Get all events From range')
@@ -377,8 +388,8 @@ class CalendarClass {
           return console.error('[Error when add event]', e)
         }
         this._dbg('log', '==> NEW EVENT detail', this._shortEvent(ie))
-        createdEvs.push(ie)
         row[ lastUpdatedProp ] = ie.getLastUpdated().toISOString()
+        result.created.push({ source: 'SHEET', row, event: ie })
         return updateList.push(row)
       }
 
@@ -397,7 +408,11 @@ class CalendarClass {
           this.onDelete("CALENDAR", row, event)
           event.deleteEvent()
         } catch (e) { return console.error('[Error when delete event]', e) }
-        deletedIds.push(eid)
+        result.deleted.push({
+          source: 'SHEET',
+          row,
+          event: { id: eid }
+        })
         return deleteList.push(row)
       }
 
@@ -416,7 +431,7 @@ class CalendarClass {
       } catch (e) { return console.error('[Error when update event]', e) }
       if (source == 'CALENDAR') {
         row[ lastUpdatedProp ] = new Date().toISOString()
-        updatedEvs.push(event)
+        result.updated.push({ source, row, event })
         return updateList.push(row)
       }
       return
@@ -439,7 +454,7 @@ class CalendarClass {
             }
             newRow[ eidProp ] = event.getId()
             updateList.push(newRow)
-            updatedEvs.push(event)
+            result.updated.push({ source: 'CALENDAR', row: null, event })
             this._dbg('log', '==> NEW ROW', newRow)
           }
         }
@@ -462,11 +477,10 @@ class CalendarClass {
       this.billSheet.remove(deleteList, [ eidProp, ...this.billSheet.uniquePropList ])
     }
 
-    return {
-      created: createdEvs,
-      updated: updatedEvs,
-      deleted: deletedIds
-    }
+    // merge updateList with createdEvs and updatedEvs
+    // return dạng: result = { created: [{ row: {}, event: {} }], updated: [], deleted: [] }
+
+    return result
 
   }
 
@@ -484,6 +498,7 @@ class CalendarClass {
       this.onCreate = null
     else
       this.onCreate = callback
+    return this
   }
 
   /**
@@ -498,6 +513,7 @@ class CalendarClass {
       this.onPullNew = null
     else
       this.onPullNew = callback
+    return this
   }
 
   /**
@@ -514,6 +530,7 @@ class CalendarClass {
       this.onUpdate = null
     else
       this.onUpdate = callback
+    return this
   }
 
   /**
@@ -530,43 +547,42 @@ class CalendarClass {
       this.onDelete = null
     else
       this.onDelete = callback
+    return this
   }
 
   /**
    * Create a new event. It will be added to the calendar and the sheet
    * @param {{}|{}[]} rowData - A row object or an array of row objects
-   * @returns {CalendarApp.Event|CalendarApp.Event[]} - The created event or an array of created events
+   * @returns {CalendarApp.Event[]} - Array of created events
    */
   createEvent(rowData) {
     let result = []
-    if (!this.isValidClass()) return result
-    if (isValidObject(rowData)) {
-      rowData = [ rowData ]
-    }
-    if (!isValidArray(rowData)) {
-      console.error('[Invalid row data]', rowData)
-      return result
-    }
-    this.billSheet.update(rowData, [ ...this.billSheet.uniquePropList ])
-    const cb = this.sync()
+    const cb = this.sync(rowData)
     if (!cb) return result
     if (!cb.created.length) return result
-    // filtered only this rows
-    return
+    return cb.created.map(e => e.event)
   }
 
   /**
-   * Update an event by event id or row properties
+   * Update an event. It will be updated to the calendar and the sheet
+   * @param {{}|{}[]} rowData - A row object or an array of row objects
+   * @returns {{source: string, row: {}, event: CalendarApp.Event}[]} - Array of updated events
    */
-  updateEvent() {
-
+  updateEvent(rowData) {
+    let result = []
+    const cb = this.sync(rowData)
+    if (!cb) return result
+    if (!cb.updated.length) return result
+    return cb.updated
   }
 
   /**
-   * Delete an event by event id or row properties
+   * delete an event. It will be deleted on the calendar and the sheet
+   * @param {string|string[]} eventId - event id or array of event ids
+   * @returns {{source: string, row: {}, event: CalendarApp.Event}[]} - Array of updated events
    */
-  deleteEvent() {
-
+  deleteEvent(rowData) {
+    
   }
 
 }
