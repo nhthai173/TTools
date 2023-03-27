@@ -7,10 +7,11 @@ function Cal(options) {
  * Chưa hoàn thiện:
  * [] Tạo method để có thể đồng bộ thủ công event từ Calendar về Sheet
  * [] Thêm các cột eidProp và lastUpdated vào sheet nếu user chưa provide trong class, thêm cột dựa vào path và header của BillSheet
- * [] Thêm điều kiện kiểm tra trước khi chạy sync: kiếm trong xem người dùng có sử dụng 1 trong các options sync hay không
- * [] Bỏ qua check lastUpdated nếu người dùng k sử dụng usePull
+ * [] Thêm option để người user có thể dùng hàm so sánh thay vì so sánh theo thời gian
 
  * -------- *
+  * [x] Thêm điều kiện kiểm tra trước khi chạy sync: kiếm trong xem người dùng có sử dụng 1 trong các options sync hay không
+  * [x] Bỏ qua check lastUpdated nếu người dùng k sử dụng usePull
   * [x] Thêm method deleteEvent để có thể xóa event đồng thời trên sheet và calendar
   * [x] Thêm method updateEvent để có thể update event đồng thời trên sheet và calendar
   * [x] Thêm method createEvent để có thể tạo event đồng thời trên sheet và calendar
@@ -327,13 +328,18 @@ class CalendarClass {
    * @returns {{created: {source: string, row: {}, event: CalendarApp.Event}[], updated: {source: string, row: {}|null, event: CalendarApp.Event}[], deleted: {source: string, row: {}, event: {id: string}}[]}} List of events have been created, updated, deleted
    */
   sync(sheetData) {
-    this._dbg('warn', 'START SYNC')
-    if (!this.isValidClass()) return
-
-    const { eidProp, lastUpdatedProp, useAdd, usePush, usePull, usePullNew, useDeleteBaseOnCalendar } = this
     let updateList = []
     let deleteList = []
     let result = { created: [], updated: [], deleted: [] }
+    const { eidProp, lastUpdatedProp, useAdd, usePush, usePull, usePullNew, useDeleteBaseOnCalendar } = this
+
+    this._dbg('warn', 'START SYNC')
+    if (!this.isValidClass()) return result
+
+    if (!useAdd && !usePush && !usePull && !usePullNew && !useDeleteBaseOnCalendar) {
+      this._dbg('error', 'No action to sync. Please set `useAdd`, `usePush`, `usePull`, `usePullNew`, `useDeleteBaseOnCalendar` to true')
+      return result
+    }
 
     if (isEmptyVariable(sheetData)) {
       sheetData = this.billSheet.toJSON()
@@ -369,8 +375,8 @@ class CalendarClass {
       const sheetLastUpdated = row[lastUpdatedProp] ? new Date(row[lastUpdatedProp]) : null
       this._dbg('log', `==> Event: ${eid}, lastUpdated: ${sheetLastUpdated} <==`)
 
-      if (!sheetLastUpdated && !eid) {
-        console.warn('Cannot defined last updated of this row. Make sure you called CalSyncHandler() in onEdit()', row)
+      if (!sheetLastUpdated && (usePull || usePush)) {
+        console.warn('Cannot sync this row with Calendar because of missing lastUpdated property\nMake sure you called CalSyncHandler() in onEdit()', row)
       }
 
       /* Create new event */
@@ -391,6 +397,7 @@ class CalendarClass {
           return console.error('[Error when add event]', e)
         }
         this._dbg('log', '==> NEW EVENT detail', this._shortEvent(ie))
+        row[eidProp] = ie.getId()
         row[lastUpdatedProp] = ie.getLastUpdated().toISOString()
         result.created.push({ source: 'SHEET', row, event: ie })
         return updateList.push(row)
@@ -423,7 +430,7 @@ class CalendarClass {
       // check is any update: comapre base on last updated time
       // - In sheet, set a onEdit trigger to update the last updated time to a col (prop)
       // - In calendar, get by getLastUpdated()
-      if (!usePush && !usePull) return
+      if ((!usePush && !usePull) || !sheetLastUpdated) return
       if (!source) return // equal - no changes
       if (!usePush && source == 'SHEET') return
       if (!usePull && source == 'CALENDAR') return
@@ -456,6 +463,7 @@ class CalendarClass {
               continue
             }
             newRow[eidProp] = event.getId()
+            newRow[lastUpdatedProp] = event.getLastUpdated().toISOString()
             updateList.push(newRow)
             result.updated.push({ source: 'CALENDAR', row: null, event })
             this._dbg('log', '==> NEW ROW', newRow)
