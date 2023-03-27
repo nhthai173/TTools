@@ -7,9 +7,12 @@ function Cal(options) {
  * Chưa hoàn thiện:
  * [] Tạo method để có thể đồng bộ thủ công event từ Calendar về Sheet
  * [] Thêm các cột eidProp và lastUpdated vào sheet nếu user chưa provide trong class, thêm cột dựa vào path và header của BillSheet
- * [] Thêm option để người user có thể dùng hàm so sánh thay vì so sánh theo thời gian
-
+    └─ Chờ thêm method addCloumn() ở BillSheet
+ * [] Thêm vào các hàng k rỗng/clear ở các hàng rỗng cột lastUpdatedProp ở mỗi lần sync
+    └─ _lastUpdatedPrettify()
+    
  * -------- *
+  * [x] Thêm option để người user có thể dùng hàm so sánh thay vì so sánh theo thời gian
   * [x] Thêm điều kiện kiểm tra trước khi chạy sync: kiếm trong xem người dùng có sử dụng 1 trong các options sync hay không
   * [x] Bỏ qua check lastUpdated nếu người dùng k sử dụng usePull
   * [x] Thêm method deleteEvent để có thể xóa event đồng thời trên sheet và calendar
@@ -50,6 +53,7 @@ class CalendarClass {
    * @param {CalendarApp.Calendar} [options.cal=null] Calendar object
    * @param {string} [options.calId=''] Calendar ID
    * @param {BillSheetClass} [options.billSheet=null] BillSheet object
+   * @param {"TIME"|"CONTENT"} [options.syncType] The type of sync. If it is "TIME", it will sync base on the last updated time. If it is "CONTENT", it will sync base on the content of the event. If "CONTENT", please provide the compare function in `compare`
    * @param {string|string[]} [options.eidProp='_eventId'] The property name of the unique ID for each row
    * @param {string} [options.lastUpdatedProp='_sheetLastUpdated'] The property name of the last updated time of sheet
    * @param {string} [options.dateProp=''] The property name of the start date of event in Sheet. This is optional, if provided, it will exec faster
@@ -61,14 +65,16 @@ class CalendarClass {
    * @param {boolean} [options.usePull=false] If true, will pull events detail to Sheet, if it is different from the sheet. It update base on the last update time, so it will not update the event if the sheet is updated after the calendar.
    * @param {boolean} [options.usePullNew=false] If true, will pull new events to Sheet, if the sheet does not have it.
    * @param {boolean} [options.useDeleteBaseOnCalendar=false] If true, will delete events on sheet if the event is deleted on the calendar.
+   * @param {(row: {}, event: CalendarApp.Event) => "SHEET" | "CALENDAR" | null} [options.compare] The compare function to compare the event content and the row. It will be used if `syncType` is "CONTENT". It will be called with 2 parameters: `row` and `event`. It should return "SHEET" if the row is the latest, "CALENDAR" if the event is the latest, or null if they are the same.
    */
   constructor({
     debug = false,
     cal = null,
     calId = '',
     billSheet = null,
+    syncType = 'TIME',
     eidProp = '_eventId',
-    lastUpdatedProp = '_sheetLastUpdated',
+    lastUpdatedProp = null,
     dateProp = '',
     startDay = null,
     endDay = null,
@@ -77,12 +83,14 @@ class CalendarClass {
     usePush = false,
     usePull = false,
     usePullNew = false,
-    useDeleteBaseOnCalendar = false
+    useDeleteBaseOnCalendar = false,
+    compare = null,
   } = {}) {
     this.debug = debug
     this.calId = calId || null
     this.cal = cal || CalendarApp.getCalendarById(this.calId)
     this.billSheet = billSheet || null
+    this.syncType = syncType
     this.eidProp = eidProp
     this.lastUpdatedProp = lastUpdatedProp
     this.dateProp = dateProp
@@ -94,6 +102,7 @@ class CalendarClass {
     this.usePull = usePull || false
     this.usePullNew = usePullNew || false
     this.useDeleteBaseOnCalendar = useDeleteBaseOnCalendar || false
+    this.compare = compare || null
 
 
     if (!this.cal) {
@@ -103,6 +112,32 @@ class CalendarClass {
     if (!this.billSheet) {
       console.error('No BillSheet set')
       return
+    }
+
+    /* Check for syncType */
+    if (this.syncType != 'TIME' || this.syncType != 'CONTENT') {
+      this.syncType = 'TIME'
+    }
+    if (this.syncType == 'CONTENT' && !this.compare) {
+      console.warn('No compare function provided for syncType "CONTENT", using default "TIME"')
+      this.syncType = 'TIME'
+    }
+    if (this.syncType == 'TIME' && !this.lastUpdatedProp) {
+      this.lastUpdatedProp = '_sheetLastUpdated'
+    }
+
+    /* Check for custom properties */
+    if (this.billSheet.path[ this.eidProp ] >= 0) { }
+    else {
+      console.warn(`Cannot find property "${this.eidProp}" in the BillSheet, creating property "${this.eidProp}"`)
+      // this.billSheet.addCloumn(this.eidProp)
+    }
+    if (this.lastUpdatedProp) {
+      if (this.billSheet.path[ this.lastUpdatedProp ] >= 0) { }
+      else {
+        console.warn(`Cannot find property "${this.lastUpdatedProp}" in the BillSheet, creating property "${this.lastUpdatedProp}"`)
+        // this.billSheet.addCloumn(this.lastUpdatedProp)
+      }
     }
 
   }
@@ -131,7 +166,7 @@ class CalendarClass {
   calSyncHandler(e) {
     /* Find lastUpdated column index */
     const path = this.billSheet.path
-    const lastUpdatedColIndex = path[this.lastUpdatedProp] || -1
+    const lastUpdatedColIndex = path[ this.lastUpdatedProp ] || -1
     if (lastUpdatedColIndex < 0) return
 
     const { authMode, triggerUid, source, range, oldValue, value, user } = e
@@ -151,7 +186,7 @@ class CalendarClass {
     const sheetVal = eSheet.getRange(rowStart, 1, (rowEnd - rowStart) + 1, eSheet.getLastColumn()).getValues()
     let tdata = targetRange.getValues().map((row, i) => {
       // All row data
-      let rowStr = sheetVal[i].join('').replace(sheetVal[i][lastUpdatedColIndex - 1], '')
+      let rowStr = sheetVal[ i ].join('').replace(sheetVal[ i ][ lastUpdatedColIndex - 1 ], '')
       // If row is empty, remove lastUpdated
       if (!rowStr) return new Array(row.length)
       return row.map(col => {
@@ -186,7 +221,7 @@ class CalendarClass {
    */
   _dbg(type, message, ...args) {
     if (!this.debug) return
-    console[type](message, ...args)
+    console[ type ](message, ...args)
   }
 
   /**
@@ -203,8 +238,11 @@ class CalendarClass {
     return {
       title: event.getTitle(),
       id: event.getId(),
+      isAllDayEvent: event.isAllDayEvent(),
       start: event.getStartTime()?.toISOString(),
-      end: event.getEndTime()?.toISOString()
+      end: event.getEndTime()?.toISOString(),
+      description: event.getDescription(),
+      location: event.getLocation(),
     }
   }
 
@@ -214,11 +252,25 @@ class CalendarClass {
    * @returns {number|null}
    */
   _getTimestamp(time) {
+    let ts = 0
     if (!time) return null
+    try {
+      ts = time.getTime()
+      if (ts > 0) return ts
+    } catch (e) { }
     try {
       return new Date(time).getTime() || null
     } catch (e) { }
     return null
+  }
+
+  /**
+   * Prettify The lastUpdated column in Sheet. It will be called in thy sync function. If the row is empty, it will be removed. If the row is not empty and the lastUpdated is empty, it will be filled with the lastUpdated of Event (if the eid is not empty), otherwise it will be filled with current time.
+   * @param {{}} row Row object
+   * @param {CalendarApp.Event} event Event object
+   */
+  _lastUpdatedPrettify(row, event) {
+    
   }
 
   /**
@@ -269,40 +321,41 @@ class CalendarClass {
   getEvents(sheetData) {
     let result = {}
     const { startDay, endDay, numberOfFutureDays, dateProp } = this
-    let range = [null, null]
+    let range = [ null, null ]
 
     // Get Range from input
     if (startDay) {
       if (endDay) {
-        range = [startDay, endDay]
+        range = [ startDay, endDay ]
       } else if (numberOfFutureDays > 0) {
         const tdate = new Date()
         tdate.setHours(0, 0, 0, 0)
         tdate.setDate(tdate.getDate() + numberOfFutureDays + 1)
-        range = [startDay, tdate]
+        range = [ startDay, tdate ]
       }
     }
 
     // Get range from sheet
-    if (!range[0] && dateProp) {
-      if (!isValidArray(sheetData) || !isValidObject(sheetData[0])) {
+    if (!range[ 0 ] && dateProp) {
+      if (!isValidArray(sheetData) || !isValidObject(sheetData[ 0 ])) {
         if (this.billSheet) {
           sheetData = this.billSheet.toJSON()
         }
       }
-      if (!isValidArray(sheetData) || !isValidObject(sheetData[0])) return result
+      if (!isValidArray(sheetData) || !isValidObject(sheetData[ 0 ])) return result
       const ts = sheetData
-        .map(r => this._getTimestamp(r[dateProp]) || 0)
+        .map(r => this._getTimestamp(r[ dateProp ]) || 0)
         .filter(r => r > 0)
-      range = [new Date(Math.min(...ts)), new Date(Math.max(...ts))]
+      if (ts.length > 1)
+        range = [ new Date(Math.min(...ts)), new Date(Math.max(...ts)) ]
     }
 
-    if (range[0] && range[1]) {
-      this._dbg('log', `Get all events from ${range[0].toISOString()} -> ${range[1].toISOString()}`)
-      const evs = this.cal.getEvents(range[0], range[1])
+    if (range[ 0 ] && range[ 1 ]) {
+      this._dbg('log', `Get all events from ${range[ 0 ].toISOString()} -> ${range[ 1 ].toISOString()}`)
+      const evs = this.cal.getEvents(range[ 0 ], range[ 1 ])
       this._dbg('log', `==> Got ${evs.length} events`)
       evs.forEach(ev => {
-        result[ev.getId()] = ev
+        result[ ev.getId() ] = ev
       })
     }
 
@@ -331,7 +384,7 @@ class CalendarClass {
     let updateList = []
     let deleteList = []
     let result = { created: [], updated: [], deleted: [] }
-    const { eidProp, lastUpdatedProp, useAdd, usePush, usePull, usePullNew, useDeleteBaseOnCalendar } = this
+    const { syncType, eidProp, lastUpdatedProp, useAdd, usePush, usePull, usePullNew, useDeleteBaseOnCalendar } = this
 
     this._dbg('warn', 'START SYNC')
     if (!this.isValidClass()) return result
@@ -345,9 +398,9 @@ class CalendarClass {
       sheetData = this.billSheet.toJSON()
     } else {
       if (isValidObject(sheetData)) {
-        sheetData = [sheetData]
+        sheetData = [ sheetData ]
       }
-      if (!sheetData || !sheetData[0] || !isValidObject(sheetData[0])) {
+      if (!sheetData || !sheetData[ 0 ] || !isValidObject(sheetData[ 0 ])) {
         console.error('[Error at sync] Invalid sheet data', sheetData)
         return result
       }
@@ -360,22 +413,24 @@ class CalendarClass {
     if (!isValidObject(events)) {
       this._dbg('log', 'Cannot found events range. try to get events of every row')
       sheetData.forEach(r => {
-        const eid = r[eidProp]
+        const eid = r[ eidProp ]
         if (!eid) return
         const ev = CalendarClass.getEvent(this.cal, eid)
         if (!ev) return
-        events[eid] = ev
+        events[ eid ] = ev
       })
     }
 
     // Compare
     this._dbg('warn', 'START COMPARE')
     sheetData.forEach(row => {
-      const eid = row[eidProp] // event id stored in the sheet
-      const sheetLastUpdated = row[lastUpdatedProp] ? new Date(row[lastUpdatedProp]) : null
+      const eid = row[ eidProp ] // event id stored in the sheet
+      let sheetLastUpdated = null
+      if (lastUpdatedProp)
+        sheetLastUpdated = row[ lastUpdatedProp ] ? new Date(row[ lastUpdatedProp ]) : null
       this._dbg('log', `==> Event: ${eid}, lastUpdated: ${sheetLastUpdated} <==`)
 
-      if (!sheetLastUpdated && (usePull || usePush)) {
+      if (syncType == 'TIME' && !sheetLastUpdated && (usePull || usePush)) {
         console.warn('Cannot sync this row with Calendar because of missing lastUpdated property\nMake sure you called CalSyncHandler() in onEdit()', row)
       }
 
@@ -397,16 +452,23 @@ class CalendarClass {
           return console.error('[Error when add event]', e)
         }
         this._dbg('log', '==> NEW EVENT detail', this._shortEvent(ie))
-        row[eidProp] = ie.getId()
-        row[lastUpdatedProp] = ie.getLastUpdated().toISOString()
+        row[ eidProp ] = ie.getId()
+        if (lastUpdatedProp)
+          row[ lastUpdatedProp ] = ie.getLastUpdated().toISOString()
         result.created.push({ source: 'SHEET', row, event: ie })
         return updateList.push(row)
       }
 
 
-      const event = events[eid]
-      events[eid].readByCalendarSync = true
-      let source = this._compareEvent(sheetLastUpdated, event?.getLastUpdated())
+      const event = events[ eid ]
+      events[ eid ].readByCalendarSync = true
+      let source = null
+      if (syncType == 'CONTENT') {
+        try { source = this.compare(row, event) }
+        catch (e) { console.error('[Error when compare event]', e, row, this._shortEvent(event)) }
+      } else if (sheetLastUpdated) {
+        source = this._compareEvent(sheetLastUpdated, event?.getLastUpdated())
+      }
 
       /* Delete event */
       if (!event) {
@@ -415,7 +477,7 @@ class CalendarClass {
         if (!this.onDelete) return console.warn('No onDelete function!')
         source = 'CALENDAR'
         try {
-          this.onDelete("CALENDAR", row, event)
+          this.onDelete("CALENDAR", row, this._shortEvent(event))
           event.deleteEvent()
         } catch (e) { return console.error('[Error when delete event]', e) }
         result.deleted.push({
@@ -427,10 +489,7 @@ class CalendarClass {
       }
 
       /* Check update event */
-      // check is any update: comapre base on last updated time
-      // - In sheet, set a onEdit trigger to update the last updated time to a col (prop)
-      // - In calendar, get by getLastUpdated()
-      if ((!usePush && !usePull) || !sheetLastUpdated) return
+      if ((!usePush && !usePull)) return
       if (!source) return // equal - no changes
       if (!usePush && source == 'SHEET') return
       if (!usePull && source == 'CALENDAR') return
@@ -438,9 +497,9 @@ class CalendarClass {
       if (!this.onUpdate) return
       try {
         this.onUpdate(source, row, event)
-      } catch (e) { return console.error('[Error when update event]', e) }
+      } catch (e) { return console.error('[Error when update event]', e, row, this._shortEvent(event)) }
       if (source == 'CALENDAR') {
-        row[lastUpdatedProp] = new Date().toISOString()
+        row[ lastUpdatedProp ] = new Date().toISOString()
         result.updated.push({ source, row, event })
         return updateList.push(row)
       }
@@ -449,7 +508,7 @@ class CalendarClass {
 
     // Handle event not in Sheet
     for (const i in events) {
-      const event = events[i]
+      const event = events[ i ]
       if (event.readByCalendarSync) continue
       try {
 
@@ -462,8 +521,8 @@ class CalendarClass {
               console.warn('[Event not pulled] because onPullNew return null', event)
               continue
             }
-            newRow[eidProp] = event.getId()
-            newRow[lastUpdatedProp] = event.getLastUpdated().toISOString()
+            newRow[ eidProp ] = event.getId()
+            newRow[ lastUpdatedProp ] = event.getLastUpdated().toISOString()
             updateList.push(newRow)
             result.updated.push({ source: 'CALENDAR', row: null, event })
             this._dbg('log', '==> NEW ROW', newRow)
@@ -472,20 +531,21 @@ class CalendarClass {
 
         /* Delete base on sheet */
         /** @deprecated **/
+        /* -------------------- */
 
       } catch (e) {
-        return console.error('[Error when handle event not in sheet]', e)
+        return console.error('[Error when handle event not in sheet]', e, this._shortEvent(event))
       }
     }
 
     if (updateList.length) {
       this._dbg('warn', `UPDATING ${updateList.length} rows`)
-      this.billSheet.update(updateList, [eidProp, ...this.billSheet.uniquePropList])
+      this.billSheet.update(updateList, [ eidProp, ...this.billSheet.uniquePropList ])
     }
 
     if (deleteList.length) {
       this._dbg('warn', `DELETING ${updateList.length} rows`)
-      this.billSheet.remove(deleteList, [eidProp, ...this.billSheet.uniquePropList])
+      this.billSheet.remove(deleteList, [ eidProp, ...this.billSheet.uniquePropList ])
     }
 
     // merge updateList with createdEvs and updatedEvs
@@ -595,15 +655,15 @@ class CalendarClass {
   deleteEvent(data) {
     if (!this.isValidClass()) return []
     if (isEmptyVariable(data)) return []
-    
+
     let result = []
     let eventIds = []
     const { eidProp } = this
     if (data && !isValidArray(data))
-      data = [data]
-    if (isValidObject(data[0]) && data[0][eidProp]) {
+      data = [ data ]
+    if (isValidObject(data[ 0 ]) && data[ 0 ][ eidProp ]) {
       data.forEach(d => {
-        const eid = d[eidProp]
+        const eid = d[ eidProp ]
         const event = this.cal.getEventById(eid)
         event.deleteEvent()
         eventIds.push(eid)
@@ -619,13 +679,13 @@ class CalendarClass {
       })
     }
     if (eventIds.length) {
-      const eidQuery = eventIds.map(eid => { [eidProp] = eid })
+      const eidQuery = eventIds.map(eid => { [ eidProp ] = eid })
       this.billSheet.queryUpdate(eidQuery, (d) => {
-        const eid = d[eidProp]
+        const eid = d[ eidProp ]
         const index = result.findIndex(r => r.event.getId() == eid)
         if (index < 0) return d
-        result[index]['row'] = JSON.parse(JSON.stringify(d))
-        for (const i in d) d[i] = ''
+        result[ index ][ 'row' ] = JSON.parse(JSON.stringify(d))
+        for (const i in d) d[ i ] = ''
         return d
       })
     }
@@ -640,8 +700,8 @@ function testCalendar() {
   const sheet = new BillSheetClass({
     sheetId: '1RsZv34LLvU1OybZipnGOXcW176f-eMxlSsKwS7NGU3o',
     sheetName: 'Calendar',
-    header: [1, 1],
-    uniquePropList: ['eid']
+    header: [ 1, 1 ],
+    uniquePropList: [ 'eid' ]
   })
   const cal = new CalendarClass({
     debug: true,
