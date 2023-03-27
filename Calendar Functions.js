@@ -6,9 +6,12 @@ function Cal(options) {
 /**
  * Chưa hoàn thiện:
  * [] Tạo method để có thể đồng bộ thủ công event từ Calendar về Sheet
- * [] Thêm method deleteEvent để có thể xóa event đồng thời trên sheet và calendar
+ * [] Thêm các cột eidProp và lastUpdated vào sheet nếu user chưa provide trong class, thêm cột dựa vào path và header của BillSheet
+ * [] Thêm điều kiện kiểm tra trước khi chạy sync: kiếm trong xem người dùng có sử dụng 1 trong các options sync hay không
+ * [] Bỏ qua check lastUpdated nếu người dùng k sử dụng usePull
 
  * -------- *
+  * [x] Thêm method deleteEvent để có thể xóa event đồng thời trên sheet và calendar
   * [x] Thêm method updateEvent để có thể update event đồng thời trên sheet và calendar
   * [x] Thêm method createEvent để có thể tạo event đồng thời trên sheet và calendar
   * [x] Code phần xóa event khi xóa row trên sheet
@@ -42,7 +45,7 @@ class CalendarClass {
 
   /**
    * 
-  * @param {Object} options
+   * @param {Object} options
    * @param {CalendarApp.Calendar} [options.cal=null] Calendar object
    * @param {string} [options.calId=''] Calendar ID
    * @param {BillSheetClass} [options.billSheet=null] BillSheet object
@@ -127,7 +130,7 @@ class CalendarClass {
   calSyncHandler(e) {
     /* Find lastUpdated column index */
     const path = this.billSheet.path
-    const lastUpdatedColIndex = path[ this.lastUpdatedProp ] || -1
+    const lastUpdatedColIndex = path[this.lastUpdatedProp] || -1
     if (lastUpdatedColIndex < 0) return
 
     const { authMode, triggerUid, source, range, oldValue, value, user } = e
@@ -147,7 +150,7 @@ class CalendarClass {
     const sheetVal = eSheet.getRange(rowStart, 1, (rowEnd - rowStart) + 1, eSheet.getLastColumn()).getValues()
     let tdata = targetRange.getValues().map((row, i) => {
       // All row data
-      let rowStr = sheetVal[ i ].join('').replace(sheetVal[ i ][ lastUpdatedColIndex - 1 ], '')
+      let rowStr = sheetVal[i].join('').replace(sheetVal[i][lastUpdatedColIndex - 1], '')
       // If row is empty, remove lastUpdated
       if (!rowStr) return new Array(row.length)
       return row.map(col => {
@@ -182,7 +185,7 @@ class CalendarClass {
    */
   _dbg(type, message, ...args) {
     if (!this.debug) return
-    console[ type ](message, ...args)
+    console[type](message, ...args)
   }
 
   /**
@@ -265,40 +268,40 @@ class CalendarClass {
   getEvents(sheetData) {
     let result = {}
     const { startDay, endDay, numberOfFutureDays, dateProp } = this
-    let range = [ null, null ]
+    let range = [null, null]
 
     // Get Range from input
     if (startDay) {
       if (endDay) {
-        range = [ startDay, endDay ]
+        range = [startDay, endDay]
       } else if (numberOfFutureDays > 0) {
         const tdate = new Date()
         tdate.setHours(0, 0, 0, 0)
         tdate.setDate(tdate.getDate() + numberOfFutureDays + 1)
-        range = [ startDay, tdate ]
+        range = [startDay, tdate]
       }
     }
 
     // Get range from sheet
-    if (!range[ 0 ] && dateProp) {
-      if (!isValidArray(sheetData) || !isValidObject(sheetData[ 0 ])) {
+    if (!range[0] && dateProp) {
+      if (!isValidArray(sheetData) || !isValidObject(sheetData[0])) {
         if (this.billSheet) {
           sheetData = this.billSheet.toJSON()
         }
       }
-      if (!isValidArray(sheetData) || !isValidObject(sheetData[ 0 ])) return result
+      if (!isValidArray(sheetData) || !isValidObject(sheetData[0])) return result
       const ts = sheetData
-        .map(r => this._getTimestamp(r[ dateProp ]) || 0)
+        .map(r => this._getTimestamp(r[dateProp]) || 0)
         .filter(r => r > 0)
-      range = [ new Date(Math.min(...ts)), new Date(Math.max(...ts)) ]
+      range = [new Date(Math.min(...ts)), new Date(Math.max(...ts))]
     }
 
-    if (!range[ 0 ] && !range[ 1 ]) {
-      this._dbg('log', `Get all events from ${range[ 0 ].toISOString()} -> ${range[ 1 ].toISOString()}`)
-      const evs = this.cal.getEvents(range[ 0 ], range[ 1 ])
+    if (range[0] && range[1]) {
+      this._dbg('log', `Get all events from ${range[0].toISOString()} -> ${range[1].toISOString()}`)
+      const evs = this.cal.getEvents(range[0], range[1])
       this._dbg('log', `==> Got ${evs.length} events`)
       evs.forEach(ev => {
-        result[ ev.getId() ] = ev
+        result[ev.getId()] = ev
       })
     }
 
@@ -336,9 +339,9 @@ class CalendarClass {
       sheetData = this.billSheet.toJSON()
     } else {
       if (isValidObject(sheetData)) {
-        sheetData = [ sheetData ]
+        sheetData = [sheetData]
       }
-      if (!sheetData || !sheetData[ 0 ] || !isValidObject(sheetData[ 0 ])) {
+      if (!sheetData || !sheetData[0] || !isValidObject(sheetData[0])) {
         console.error('[Error at sync] Invalid sheet data', sheetData)
         return result
       }
@@ -349,22 +352,22 @@ class CalendarClass {
     let events = this.getEvents(sheetData)
     // Otherwise get event of everysingle row
     if (!isValidObject(events)) {
-      this._dbg('Cannot found events range. try to get events of every row')
+      this._dbg('log', 'Cannot found events range. try to get events of every row')
       sheetData.forEach(r => {
-        const eid = r[ eidProp ]
+        const eid = r[eidProp]
         if (!eid) return
         const ev = CalendarClass.getEvent(this.cal, eid)
         if (!ev) return
-        events[ eid ] = ev
+        events[eid] = ev
       })
     }
 
     // Compare
     this._dbg('warn', 'START COMPARE')
     sheetData.forEach(row => {
-      const eid = row[ eidProp ] // event id stored in the sheet
-      const sheetLastUpdated = row[ lastUpdatedProp ] ? new Date(row[ lastUpdatedProp ]) : null
-      this.log('log', `==> Event: ${eid}, lastUpdated: ${sheetLastUpdated} <==`)
+      const eid = row[eidProp] // event id stored in the sheet
+      const sheetLastUpdated = row[lastUpdatedProp] ? new Date(row[lastUpdatedProp]) : null
+      this._dbg('log', `==> Event: ${eid}, lastUpdated: ${sheetLastUpdated} <==`)
 
       if (!sheetLastUpdated && !eid) {
         console.warn('Cannot defined last updated of this row. Make sure you called CalSyncHandler() in onEdit()', row)
@@ -388,14 +391,14 @@ class CalendarClass {
           return console.error('[Error when add event]', e)
         }
         this._dbg('log', '==> NEW EVENT detail', this._shortEvent(ie))
-        row[ lastUpdatedProp ] = ie.getLastUpdated().toISOString()
+        row[lastUpdatedProp] = ie.getLastUpdated().toISOString()
         result.created.push({ source: 'SHEET', row, event: ie })
         return updateList.push(row)
       }
 
 
-      const event = events[ eid ]
-      events[ eid ].readByCalendarSync = true
+      const event = events[eid]
+      events[eid].readByCalendarSync = true
       let source = this._compareEvent(sheetLastUpdated, event?.getLastUpdated())
 
       /* Delete event */
@@ -430,7 +433,7 @@ class CalendarClass {
         this.onUpdate(source, row, event)
       } catch (e) { return console.error('[Error when update event]', e) }
       if (source == 'CALENDAR') {
-        row[ lastUpdatedProp ] = new Date().toISOString()
+        row[lastUpdatedProp] = new Date().toISOString()
         result.updated.push({ source, row, event })
         return updateList.push(row)
       }
@@ -439,7 +442,7 @@ class CalendarClass {
 
     // Handle event not in Sheet
     for (const i in events) {
-      const event = events[ i ]
+      const event = events[i]
       if (event.readByCalendarSync) continue
       try {
 
@@ -452,7 +455,7 @@ class CalendarClass {
               console.warn('[Event not pulled] because onPullNew return null', event)
               continue
             }
-            newRow[ eidProp ] = event.getId()
+            newRow[eidProp] = event.getId()
             updateList.push(newRow)
             result.updated.push({ source: 'CALENDAR', row: null, event })
             this._dbg('log', '==> NEW ROW', newRow)
@@ -469,12 +472,12 @@ class CalendarClass {
 
     if (updateList.length) {
       this._dbg('warn', `UPDATING ${updateList.length} rows`)
-      this.billSheet.update(updateList, [ eidProp, ...this.billSheet.uniquePropList ])
+      this.billSheet.update(updateList, [eidProp, ...this.billSheet.uniquePropList])
     }
 
     if (deleteList.length) {
       this._dbg('warn', `DELETING ${updateList.length} rows`)
-      this.billSheet.remove(deleteList, [ eidProp, ...this.billSheet.uniquePropList ])
+      this.billSheet.remove(deleteList, [eidProp, ...this.billSheet.uniquePropList])
     }
 
     // merge updateList with createdEvs and updatedEvs
@@ -578,11 +581,86 @@ class CalendarClass {
 
   /**
    * delete an event. It will be deleted on the calendar and the sheet
-   * @param {string|string[]} eventId - event id or array of event ids
-   * @returns {{source: string, row: {}, event: CalendarApp.Event}[]} - Array of updated events
+   * @param {string|string[]} data - event id or array of event ids
+   * @returns {{row: {}, event: CalendarApp.Event}[]} - Array of deleted events
    */
-  deleteEvent(rowData) {
+  deleteEvent(data) {
+    if (!this.isValidClass()) return []
+    if (isEmptyVariable(data)) return []
     
+    let result = []
+    let eventIds = []
+    const { eidProp } = this
+    if (data && !isValidArray(data))
+      data = [data]
+    if (isValidObject(data[0]) && data[0][eidProp]) {
+      data.forEach(d => {
+        const eid = d[eidProp]
+        const event = this.cal.getEventById(eid)
+        event.deleteEvent()
+        eventIds.push(eid)
+        result.push({ event })
+      })
+    } else {
+      data.forEach(eid => {
+        const event = this.cal.getEventById(eid)
+        if (!event) return
+        event.deleteEvent()
+        eventIds.push(eid)
+        result.push({ event })
+      })
+    }
+    if (eventIds.length) {
+      const eidQuery = eventIds.map(eid => { [eidProp] = eid })
+      this.billSheet.queryUpdate(eidQuery, (d) => {
+        const eid = d[eidProp]
+        const index = result.findIndex(r => r.event.getId() == eid)
+        if (index < 0) return d
+        result[index]['row'] = JSON.parse(JSON.stringify(d))
+        for (const i in d) d[i] = ''
+        return d
+      })
+    }
   }
 
+}
+
+
+
+
+function testCalendar() {
+  const sheet = new BillSheetClass({
+    sheetId: '1RsZv34LLvU1OybZipnGOXcW176f-eMxlSsKwS7NGU3o',
+    sheetName: 'Calendar',
+    header: [1, 1],
+    uniquePropList: ['eid']
+  })
+  const cal = new CalendarClass({
+    debug: true,
+    calId: 'vssvn4d9j1ksk98912qluu9q28@group.calendar.google.com',
+    billSheet: sheet,
+    dateProp: 'startTime',
+    useAdd: true
+  })
+  cal.onCreate((source, row, event) => {
+    const ee = CalendarApp.getEventById()
+    if (!isValidObject(row)) return
+    if (!isDate(row.startTime)) return
+    if (source == 'SHEET') {
+      let title = row.title
+      if (row.shortLocation) title = `[${row.shortLocation}] ${title}`
+      event.setTitle(title)
+      event.setDescription(row.description)
+      if (row.isAllDay) {
+        event.setAllDayDate(row.startTime)
+      } else {
+        event.setTime(row.startTime, row.endTime)
+      }
+      if (row.location) event.setLocation(row.location)
+      if (row.notify) event.addPopupReminder(row.notify)
+    }
+  })
+
+
+  console.log(cal.sync())
 }
