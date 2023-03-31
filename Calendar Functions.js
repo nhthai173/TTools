@@ -6,12 +6,12 @@ function Cal(options) {
 /**
  * Chưa hoàn thiện:
  * [] Tạo method để có thể đồng bộ thủ công event từ Calendar về Sheet
- * [] Thêm các cột eidProp và lastUpdated vào sheet nếu user chưa provide trong class, thêm cột dựa vào path và header của BillSheet
-    └─ Chờ thêm method addCloumn() ở BillSheet
  * [] Thêm vào các hàng k rỗng/clear ở các hàng rỗng cột lastUpdatedProp ở mỗi lần sync
-    └─ _lastUpdatedPrettify()
-    
- * -------- *
+└─ _lastUpdatedPrettify()
+
+* -------- *
+  * [x] Thêm các cột eidProp và lastUpdated vào sheet nếu user chưa provide trong class, thêm cột dựa vào path và header của BillSheet
+     └─ Chờ thêm method addCloumn() ở BillSheet
   * [x] Thêm option để người user có thể dùng hàm so sánh thay vì so sánh theo thời gian
   * [x] Thêm điều kiện kiểm tra trước khi chạy sync: kiếm trong xem người dùng có sử dụng 1 trong các options sync hay không
   * [x] Bỏ qua check lastUpdated nếu người dùng k sử dụng usePull
@@ -130,13 +130,13 @@ class CalendarClass {
     if (this.billSheet.path[ this.eidProp ] >= 0) { }
     else {
       console.warn(`Cannot find property "${this.eidProp}" in the BillSheet, creating property "${this.eidProp}"`)
-      // this.billSheet.addCloumn(this.eidProp)
+      this.billSheet.addColumn(this.eidProp)
     }
     if (this.lastUpdatedProp) {
       if (this.billSheet.path[ this.lastUpdatedProp ] >= 0) { }
       else {
         console.warn(`Cannot find property "${this.lastUpdatedProp}" in the BillSheet, creating property "${this.lastUpdatedProp}"`)
-        // this.billSheet.addCloumn(this.lastUpdatedProp)
+        this.billSheet.addColumn(this.lastUpdatedProp)
       }
     }
 
@@ -442,14 +442,13 @@ class CalendarClass {
         const ie = this.cal.createEvent('inherit', new Date(0), new Date(3600000))
         try {
           this.onCreate('SHEET', row, ie)
-          if (ie.getStartTime().getTime() == 0) {
-            console.warn('[Event not created] This is inherit event object, please edit it to create event', row)
-            ie.deleteEvent()
-            return
-          }
         } catch (e) {
+          return console.error('[Error when add event] Error at onCreate', e)
+        }
+        if (ie.getStartTime().getTime() == 0) {
+          console.warn('[Event not created] This is inherit event object, please edit it to create event', row)
           ie.deleteEvent()
-          return console.error('[Error when add event]', e)
+          return
         }
         this._dbg('log', '==> NEW EVENT detail', this._shortEvent(ie))
         row[ eidProp ] = ie.getId()
@@ -538,6 +537,7 @@ class CalendarClass {
       }
     }
 
+    // nếu mà add thì lấy đâu ra eid để mà update
     if (updateList.length) {
       this._dbg('warn', `UPDATING ${updateList.length} rows`)
       this.billSheet.update(updateList, [ eidProp, ...this.billSheet.uniquePropList ])
@@ -711,7 +711,7 @@ function testCalendar() {
     useAdd: true
   })
   cal.onCreate((source, row, event) => {
-    const ee = CalendarApp.getEventById()
+    // const ee = CalendarApp.getEventById()
     if (!isValidObject(row)) return
     if (!isDate(row.startTime)) return
     if (source == 'SHEET') {
