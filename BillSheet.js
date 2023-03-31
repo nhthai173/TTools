@@ -472,7 +472,7 @@ class BillSheetClass {
     if (this.afterGet) {
       try {
         let tData = this.afterGet(data) // Object.create(data)
-        if (tData === null)  return null
+        if (tData === null) return null
         if (isValidObject(tData)) data = tData
       } catch (e) { console.error(`Error at afterGet`, e) }
     }
@@ -1032,6 +1032,66 @@ class BillSheetClass {
     ss.deleteSheet(sheet)
     return true
   }
+
+
+
+
+
+  /**
+   * Add new column to sheet
+   * @param {string} name Column name
+   * @returns {boolean} true if success add
+   */
+  addColumn(name) {
+    const { header } = this
+    const s = this._sheet()
+    if (!s) return false
+    try {
+
+      const lastCol = s.getLastColumn()
+      if (isValidArray(header) && header.length > 1) {
+        const row = header[ 0 ]
+        s.getRange(row, lastCol + 1).setValue(name)
+        this._initPath()
+        if (header.length > 3) {
+          console.warn(`A column named ${name} has been added to the sheet. But the path is not updated because of the column limit. Please update the header config`)
+        }
+        return true
+      } else {
+        s.getRange(1, lastCol + 1).setValue(name)
+        this._initPath()
+        return true
+      }
+
+    } catch (e) {
+      console.error(e)
+      return false
+    }
+  }
+
+
+
+
+  
+
+  /**
+   * Add new columns to sheet
+   * @param {string[]} names Column names
+   * @returns {boolean} true if success add
+   */
+  addColumns(names) {
+    if (!isValidArray(names)) return false
+    let anySuccess = false
+    for (const i in names) {
+      const name = names[ i ]
+      if (name && typeof name === 'string' && this.addColumn(name)) {
+        anySuccess = true
+      }
+    }
+    return anySuccess
+  }
+
+
 
 
 
