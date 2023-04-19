@@ -204,6 +204,21 @@ class DatabaseSyncClass {
         a = Number(a)
         b = Number(b)
         return (isNaN(a) && isNaN(b)) || (a == b)
+      case NOTION_DATA_TYPE.relation:
+      case NOTION_DATA_TYPE.multi_select:
+        if (!isValidArray(a) && !isValidArray(b)) return true
+        if (!Array.isArray(a) || !Array.isArray(b)) return false
+        a = a.map((v) => v.replace(/\-/g, ''))
+        a = a.sort((a, b) => a.localeCompare(b))
+        b = b.map((v) => v.replace(/\-/g, ''))
+        b = b.sort((a, b) => a.localeCompare(b))
+        const aRaw = a.join('')
+        const bRaw = b.join('')
+        if (aRaw == bRaw) return true // quick compare
+        if (!aRaw) a = []
+        if (!bRaw) b = []
+        if (a.length != b.length) return false
+        return a.every((v) => b.includes(v))
       default:
         return smartCompare(a, b)
     }
