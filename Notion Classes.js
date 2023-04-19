@@ -786,6 +786,9 @@ class NotionPropertyMaker {
       p = {
         "multi_select": []
       }
+      if (!isEmptyVariable(value) && !isValidArray(value)) {
+        value = [ value ]
+      }
       if (isValidArray(value)) {
         value.forEach(v => {
           if (!isEmptyVariable(v)) {
@@ -820,6 +823,9 @@ class NotionPropertyMaker {
       let valid = false
       p = {
         "relation": []
+      }
+      if (!isEmptyVariable(value) && !isValidArray(value)) {
+        value = [ value ]
       }
       if (isValidArray(value)) {
         value.forEach(v => {
