@@ -1102,6 +1102,7 @@ class BillSheetClass {
    * @param {Object} options
    * @param {string} options.notionToken Notion private token
    * @param {string} options.notionDatabaseId Notion database id
+   * @param {{}} [options.databaseFilter] Notion database filter. To reduce the number of pages to be pulled/pushed
    * @param {NotionSyncProperty[]} [options.sProps=[]] Sheet properties to sync to Notion. The value of each property in sheet will be synced to the corresponding property in Notion (Sheet -> Notion). Example: [{name: 'Time', type: NOTION_DATA_TYPE.date}]
    * @param {NotionSyncProperty[]} [options.nProps=[]] Notion properties to sync to Sheet. The value of each property in Notion will be synced to the corresponding property in Sheet (Notion -> Sheet). Example: [{name: 'Time', type: NOTION_DATA_TYPE.date}]
    * @param {string|string[]} [options.idProp] Identifier properties. The value of these properties will be used to identify the row in Notion and Sheet. Default is `uniquePropList`
@@ -1119,12 +1120,14 @@ class BillSheetClass {
     return { payload };
   }
    * @param {NotionSyncCustomPull} [options.fCustomPull] Function will be called after pull/pullNew from Notion and before save to Sheet. If this function return a valid Object, it will be used as the data to save to Sheet.
+   * @param {Boolean} [options.debug=false] Pass true to enable debug mode
    * 
    * @returns {{}[]} Notion database data
    */
   syncNotion({
     notionToken = '',
     databaseId = '',
+    databaseFilter = {},
     sProps = [],
     nProps = [],
     idProp = [],
@@ -1135,9 +1138,10 @@ class BillSheetClass {
     usePullNew = false,
     fCustomPush,
     fCustomPull,
+    debug = false
   } = {}) {
     const sheet = this
-    if (typeof idProp === 'object' && !isValidArray(idProp)) {
+    if (!idProp || (typeof idProp === 'object' && !isValidArray(idProp))) {
       idProp = this.uniquePropList
     }
     return new DatabaseSyncClass({
@@ -1145,6 +1149,7 @@ class BillSheetClass {
       data: sheet.toJSON(),
       notionToken,
       databaseId,
+      databaseFilter,
       sProps,
       nProps,
       idProp,
@@ -1154,7 +1159,8 @@ class BillSheetClass {
       usePush,
       usePullNew,
       fCustomPush,
-      fCustomPull
+      fCustomPull,
+      debug
     }).sync()
   }
 
