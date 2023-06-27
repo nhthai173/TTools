@@ -1,6 +1,6 @@
-function Cal(options) {
-  return null
-  // return new CalendarClass(options)
+function Calendar(options) {
+  // return null
+  return new CalendarClass(options)
 }
 
 /**
@@ -102,8 +102,6 @@ class CalendarClass {
     this.usePull = usePull || false
     this.usePullNew = usePullNew || false
     this.useDeleteBaseOnCalendar = useDeleteBaseOnCalendar || false
-    this.compare = compare || null
-
 
     if (!this.cal) {
       console.warn('No calendar set, using default')
@@ -112,6 +110,15 @@ class CalendarClass {
     if (!this.billSheet) {
       console.error('No BillSheet set')
       return
+    }
+
+    /* Check compare function */
+    if (compare && typeof compare == 'function') {
+      this.compare = compare
+    } else {
+      this.compare = null
+      if (compare)
+        console.warn('Only accept function type for "compare"')
     }
 
     /* Check for syncType */
@@ -363,7 +370,7 @@ class CalendarClass {
   }
 
   /**
-   * Compare the last updated time of sheet and calendar
+   * Compare event base on the last updated time of sheet and calendar
    * @param {Date|number} sheetLastUpdated 
    * @param {Date|number} calLastUpdated 
    * @returns {"SHEET"|"CALENDAR"|null} null is equal
@@ -409,8 +416,21 @@ class CalendarClass {
     // Try to get all events in one request
     this._dbg('log', 'Get all events From range')
     let events = this.getEvents(sheetData)
+    // Check if all events in the sheet have been retrieved 
+    if (isValidObject(events)) {
+      const gotEventIds = Object.keys(events)
+      sheetData
+        .map(d => d[ eidProp ])
+        .forEach(eid => {
+          if (!eid) return
+          if (gotEventIds.includes(eid)) return
+          const ev = CalendarClass.getEvent(this.cal, eid)
+          if (!ev) return
+          events[ eid ] = ev
+        })
+    } 
     // Otherwise get event of everysingle row
-    if (!isValidObject(events)) {
+    else {
       this._dbg('log', 'Cannot found events range. try to get events of every row')
       sheetData.forEach(r => {
         const eid = r[ eidProp ]
@@ -460,7 +480,6 @@ class CalendarClass {
 
 
       const event = events[ eid ]
-      events[ eid ].readByCalendarSync = true
       let source = null
       if (syncType == 'CONTENT') {
         try { source = this.compare(row, event) }
@@ -488,6 +507,7 @@ class CalendarClass {
       }
 
       /* Check update event */
+      events[ eid ].readByCalendarSync = true
       if ((!usePush && !usePull)) return
       if (!source) return // equal - no changes
       if (!usePush && source == 'SHEET') return
@@ -540,7 +560,7 @@ class CalendarClass {
     // nếu mà add thì lấy đâu ra eid để mà update
     if (updateList.length) {
       this._dbg('warn', `UPDATING ${updateList.length} rows`)
-      this.billSheet.update(updateList, [ eidProp, ...this.billSheet.uniquePropList ])
+      this.billSheet.update(updateList, [ this.billSheet.uniquePropList ])
     }
 
     if (deleteList.length) {
