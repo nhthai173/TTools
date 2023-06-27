@@ -261,6 +261,7 @@ class BillSheetClass {
    * @returns {SpreadsheetApp.Spreadsheet|null}
    */
   _spreadSheet() {
+    if (this.sheetId) return SpreadsheetApp.openById(this.sheetId)
     const ss = this._sheet()
     if (ss) return ss.getParent()
     return null
