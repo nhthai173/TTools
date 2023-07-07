@@ -913,11 +913,6 @@ class BillSheetClass {
     ignoreAppendTransform = false,
     ignoreDataTransform = false
   } = {}) {
-    function _pe(b) {
-      if (b) this.prettify()
-      return b
-    }
-
     if (isValidObject(data)) data = [ data ]
     if (!isValidArray(data)) return false
 
@@ -945,18 +940,23 @@ class BillSheetClass {
       if (Object.values(row).join('') === '') return
       rows.push(row)
     })
-    if (!rows.length) return _pe(true) // nothing to append
+    // nothing to append
+    if (!rows.length) {
+      this.prettify()
+      return true
+    }
 
     // Init sheet range
     let startCol = Math.min(...Object.values(path)) + 1
     const range = ss.getRange(ss.getLastRow() + 1, startCol, rows.length, rowLen)
     if (!range) return false
     try { range.setValues(rows) }
-    catch (e) { 
+    catch (e) {
       console.error('Error at BillSheet.append:', e)
       return false
     }
-    return _pe(true)
+    this.prettify()
+    return true
   }
 
 
@@ -1094,7 +1094,7 @@ class BillSheetClass {
 
 
 
-  
+
 
   /**
    * Add new columns to sheet
