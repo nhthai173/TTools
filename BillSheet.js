@@ -1275,8 +1275,9 @@ class BillSheetClass {
           data.sort((a, b) => {
             const araw = Object.values(a).join('').trim()
             const braw = Object.values(b).join('').trim()
-            if (!braw || !araw) return -1
-            return 1
+            if (!braw || braw == '') return -1
+            if (!araw || araw == '') return 1
+            return 0
           })
         }
         range.setValues(data)
