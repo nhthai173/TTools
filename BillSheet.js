@@ -1271,6 +1271,13 @@ class BillSheetClass {
             else
               return b[ props.sortProp ] - a[ props.sortProp ]
           })
+        } else {
+          data.sort((a, b) => {
+            const araw = Object.values(a).join('').trim()
+            const braw = Object.values(b).join('').trim()
+            if (!braw || !araw) return -1
+            return 1
+          })
         }
         range.setValues(data)
       }
