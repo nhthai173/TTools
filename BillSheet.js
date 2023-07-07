@@ -5,8 +5,8 @@
   * @param {SpreadsheetApp.Sheet} options.sheet Google Sheet. If it is not null, sheetId and sheetName will be ignored.
   * @param {string} options.sheetId Google Sheet ID
   * @param {string} options.sheetName Google Sheet Name
-  * @param {{}|undefined} [options.path] Pairs of key and column index
-  * @param {number[]|{}} [options.header] Header configuration. If it is an array, it is the range of header (like getRange()). Now `path` will be auto detected with the propName is the value of cell and the column index. If it is an object, it is the same with `path`.
+  * @param {{}|undefined} [options.path] Pairs of key and column index. The index is 0-based.
+  * @param {number[]|{}} [options.header] Header configuration. If it is an array, it is the range of header (like getRange()). Now `path` will be auto detected with the propName is the value of cell and the column index. If it is an object, it is the same with `path`. The index is 1-based.
   * @param {number} [options.startRow] Start row index
   * @param {number} [options.startColumn] Start column index
   * @param {string} [options.sortProp] Name of property to sort
@@ -67,8 +67,8 @@ class BillSheetClass {
     * @param {SpreadsheetApp.Sheet} options.sheet Google Sheet. If it is not null, sheetId and sheetName will be ignored.
     * @param {string} options.sheetId Google Sheet ID
     * @param {string} options.sheetName Google Sheet Name
-    * @param {{}|undefined} [options.path] Pairs of key and column index
-    * @param {number[]|{}} [options.header] Header configuration. If it is an array, it is the range of header (like getRange()). Now `path` will be auto detected with the propName is the value of cell and the column index. If it is an object, it is the same with `path`.
+    * @param {{}|undefined} [options.path] Pairs of key and column index. The index is 0-based.
+    * @param {number[]|{}} [options.header] Header configuration. If it is an array, it is the range of header (like getRange()). Now `path` will be auto detected with the propName is the value of cell and the column index. If it is an object, it is the same with `path`. The index is 1-based.
     * @param {number} [options.startRow] Start row index
     * @param {number} [options.startColumn] Start column index
     * @param {string} [options.sortProp] Name of property to sort
@@ -268,7 +268,7 @@ class BillSheetClass {
   }
 
   /**
-   * Return data range
+   * Return data range (exclude header)
    * @param {SpreadsheetApp.Sheet|undefined} sheet
    * @returns {SpreadsheetApp.Range|null}
    */
@@ -745,7 +745,7 @@ class BillSheetClass {
       this.prettify()
       anyChange = true
     }
-    if (isValidArray(appendList)) {
+    if (appendList.length) {
       anyChange = this.append(appendList, {
         ignoreDataTransform: isBeforeAppendAvailable
       }) || anyChange
@@ -913,35 +913,56 @@ class BillSheetClass {
     ignoreAppendTransform = false,
     ignoreDataTransform = false
   } = {}) {
-    if (isValidArray(data)) {
-      let anySuccess = false
-      for (const i in data) {
-        if (isValidObject(data[ i ])) {
-          const add = this._append(data[ i ], {
-            ignoreAppendTransform,
-            ignoreDataTransform
-          })
-          if (add) anySuccess = true
-        }
-      }
-      if (anySuccess) {
-        this.prettify()
-        return true
-      }
-    } else if (isValidObject(data)) {
-      const add = this._append(data, {
-        ignoreAppendTransform,
-        ignoreDataTransform
-      })
-      if (add) this.prettify()
-      return add
+    function _pe(b) {
+      if (b) this.prettify()
+      return b
     }
-    return false
+
+    if (isValidObject(data)) data = [ data ]
+    if (!isValidArray(data)) return false
+
+    const { path } = this
+    const ss = this._sheet()
+    if (ss === null) return false
+    let rowLen = 0
+    let rows = [] // array of array
+    if (isValidObject(path))
+      rowLen = Math.max(...Object.values(path)) + 1
+    if (rowLen < 1) return false
+
+    // Validate data
+    data.forEach(d => {
+      if (!ignoreDataTransform) d = this._transformData(d)
+      if (!ignoreAppendTransform) d = this._transformAppend(d)
+      if (!isValidObject(d)) return
+      let row = new Array(rowLen)
+      for (const i in path) {
+        if (d[ i ] !== undefined)
+          row[ path[ i ] ] = d[ i ]
+        else
+          row[ path[ i ] ] = ''
+      }
+      if (Object.values(row).join('') === '') return
+      rows.push(row)
+    })
+    if (!rows.length) return _pe(true) // nothing to append
+
+    // Init sheet range
+    let startCol = Math.min(...Object.values(path)) + 1
+    const range = ss.getRange(ss.getLastRow() + 1, startCol, rows.length, rowLen)
+    if (!range) return false
+    try { range.setValues(rows) }
+    catch (e) { 
+      console.error('Error at BillSheet.append:', e)
+      return false
+    }
+    return _pe(true)
   }
 
 
 
   /**
+   * @deprecated
    * Append data to new row in sheet.
    * 
    * @param {{}} data rowData to append
