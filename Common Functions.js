@@ -93,7 +93,7 @@ function compareDate(a, b, {
  * @param {any} a
  * @param {any} b
  * @param {Object} options
- * @param {string} [options.type] "" | "number". if "number", it will convert to number before compare
+ * @param {""|"number"|"contains"} [options.type] if "number", it will convert to number before compare. "Contains" will use "includes" function
  * @param {Boolean} [options.allowEmpty=false] if true, it will return true if both are empty
  * @param {Boolean} [options.ignoreOrder=false] if true, it will ignore order of array
  * @return {boolean} true if equal
