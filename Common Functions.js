@@ -176,8 +176,11 @@ function smartCompare(a, b, {
       return output
     }
 
-    output = a == b
-
+    if (typeof a == 'string' && typeof b == 'string' && type == 'contains') {
+      output = a.includes(b)
+    } else {
+      output = a == b
+    }
   } catch (e) { console.error('Error at [smartCompare]', e) }
   return output
 }
